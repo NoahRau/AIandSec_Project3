@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strukturmodell vs S1000D</title>
+    <style>
+        :root {
+            --tsm-color: #8e24aa;
+            --tsm-bg: #f3e5f5;
+            --sns-color: #2e7d32;
+            --sns-bg: #e8f5e9;
+            --arrow-color: #f57f17;
+            --line-color: #bbb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #fff;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+            margin: 0;
+        }
+
+        .container {
+            display: flex;
+            gap: 100px;
+            width: 1100px; /* Breiter für den Baum */
+            position: relative;
+            align-items: flex-start; /* Wichtig damit Höhen sich anpassen können */
+        }
+
+        /* --- SPALTEN --- */
+        .column {
+            flex: 1;
+            border-radius: 12px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            min-height: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            position: relative;
+        }
+
+        .col-tsm {
+            border-top: 6px solid var(--tsm-color);
+            background-color: var(--tsm-bg);
+        }
+
+        .col-sns {
+            border-top: 6px solid var(--sns-color);
+            background-color: var(--sns-bg);
+            flex: 1.4; /* Rechte Seite etwas breiter für den Baum */
+        }
+
+        h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #555;
+            margin-top: 0;
+            border-bottom: 2px solid rgba(0,0,0,0.05);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        /* --- TSM (LINKS) --- */
+        .concept-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            /* Vertikal zentrieren mittels margin auto */
+            margin-top: auto;
+            margin-bottom: auto;
+            box-shadow: 0 4px 10px rgba(142, 36, 170, 0.15);
+            border-left: 5px solid var(--tsm-color);
+            font-size: 14px;
+            position: relative;
+        }
+
+        .concept-title {
+            color: var(--tsm-color);
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        ul.concept-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        ul.concept-list li {
+            padding: 4px 0;
+            color: #444;
+            display: flex;
+            align-items: center;
+        }
+        ul.concept-list li::before {
+            content: "•";
+            color: var(--tsm-color);
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        /* --- CSS TREE STRUCTURE (RECHTS) --- */
+        .tree {
+            display: flex;
+            justify-content: center;
+        }
+
+        .tree ul {
+            padding-top: 20px;
+            position: relative;
+            transition: all 0.5s;
+            display: flex;
+            justify-content: center;
+            margin: 0;
+            padding-left: 0;
+        }
+
+        .tree li {
+            float: left; text-align: center;
+            list-style-type: none;
+            position: relative;
+            padding: 20px 10px 0 10px;
+            transition: all 0.5s;
+        }
+
+        /* Verbindungslinien (horizontal/vertikal) */
+        .tree li::before, .tree li::after {
+            content: ''; position: absolute; top: 0; right: 50%;
+            border-top: 2px solid var(--line-color);
+            width: 50%; height: 20px;
+        }
+        .tree li::after {
+            right: auto; left: 50%;
+            border-left: 2px solid var(--line-color);
+        }
+
+        /* Nur ein Kind? Linie gerade runter */
+        .tree li:only-child::after, .tree li:only-child::before {
+            display: none;
+        }
+        .tree li:only-child { padding-top: 0;}
+
+        /* Erster und letzter Ast Korrektur */
+        .tree li:first-child::before, .tree li:last-child::after {
+            border: 0 none;
+        }
+        .tree li:last-child::before {
+            border-right: 2px solid var(--line-color);
+            border-radius: 0 5px 0 0;
+        }
+        .tree li:first-child::after {
+            border-radius: 5px 0 0 0;
+        }
+
+        /* Der vertikale Strich für einzelne Kinder wieder hinzufügen */
+        .tree ul ul::before{
+            content: ''; position: absolute; top: 0; left: 50%;
+            border-left: 2px solid var(--line-color);
+            width: 0; height: 20px;
+        }
+
+        /* --- NODES --- */
+        .node-content {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 8px 18px;
+            border-radius: 50px;
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* --- KLINGEL SPECIAL --- */
+        .node-klingel {
+            background-color: #e8f5e9;
+            border: 2px solid var(--sns-color);
+            color: var(--sns-color);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            display: inline-block;
+            box-shadow: 0 4px 10px rgba(46,125,50,0.2);
+            min-width: 100px;
+        }
+        .node-klingel small {
+            display: block;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: normal;
+            margin-top: 2px;
+        }
+
+        /* --- DOKUMENTE --- */
+        .docs-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 15px;
+            align-items: flex-start;
+            /* Strich zur Klingel */
+            position: relative;
+            margin-left: 20px;
+            border-left: 1px dashed var(--sns-color);
+            padding-left: 15px;
+        }
+
+        .file-card {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #444;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .file-card span { margin-right: 6px; font-size: 14px; }
+
+        /* --- PFEIL --- */
+        .arrow-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- LINKS: TSM -->
+    <div class="column col-tsm">
+        <h2>Techn. Strukturmodell (TSM)</h2>
+        <div class="concept-card" id="target-left">
+            <span class="concept-title">Konzept: Klingel</span>
+            <ul class="concept-list">
+                <li>ist Teil d. Lenkers</li>
+                <li>Teilenummer: <b>123</b></li>
+                <li>Funktion: <i>läuten</i></li>
+                <li style="color: var(--tsm-color); font-weight:600; margin-top:5px;">
+                    ⟷ ist gleich SNS-Klingel
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- PFEIL -->
+    <svg class="arrow-overlay">
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7"
+                    refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#f57f17" />
+            </marker>
+        </defs>
+        <path stroke="#f57f17" stroke-width="3" fill="none" marker-end="url(#arrowhead)" />
+        <!-- Label "Alignment" -->
+        <rect x="0" y="0" width="80" height="24" rx="4" fill="#f57f17" id="label-bg" />
+        <text fill="white" font-weight="bold" font-size="12" text-anchor="middle" alignment-baseline="middle" id="label-text">Alignment</text>
+    </svg>
+
+    <!-- RECHTS: SNS BAUM -->
+    <div class="column col-sns">
+        <h2>S1000D Struktur (SNS)</h2>
+
+        <div class="tree">
+            <ul>
+                <li>
+                    <div class="node-content">Kapitel</div>
+                    <ul>
+                        <li>
+                            <div class="node-content">Fahrrad</div>
+                            <ul>
+                                <!-- Ast 1: Räder -->
+                                <li>
+                                    <div class="node-content">Räder</div>
+                                </li>
+                                <!-- Ast 2: Lenker -->
+                                <li>
+                                    <div class="node-content">Lenker</div>
+                                    <!-- Unter Lenker hängt die Klingel -->
+                                    <ul>
+                                        <li>
+                                            <div class="node-klingel" id="target-right">
+                                                🔔 Klingel
+                                                <small>Strukturelement</small>
+                                            </div>
+                                            <!-- Dokumente direkt unter der Klingel -->
+                                            <div class="docs-container">
+                                                <div class="file-card" style="border-left:3px solid #e53935;">
+                                                    <span>📄</span> Klingel ausbauen
+                                                </div>
+                                                <div class="file-card" style="border-left:3px solid #1e88e5;">
+                                                    <span>📄</span> Doku: Klingeln
+                                                </div>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function connectDivs() {
+        const left = document.getElementById('target-left');
+        const right = document.getElementById('target-right');
+        const svg = document.querySelector('.arrow-overlay');
+        const path = svg.querySelector('path');
+        const text = svg.querySelector('#label-text');
+        const bg = svg.querySelector('#label-bg');
+
+        if(left && right) {
+            const containerRect = document.querySelector('.container').getBoundingClientRect();
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+
+            // Start: Linker Rand der Klingel-Box
+            const startX = (rightRect.left - containerRect.left);
+            const startY = (rightRect.top - containerRect.top) + (rightRect.height / 2);
+
+            // Ende: Rechter Rand der Konzept-Box
+            const endX = (leftRect.right - containerRect.left) + 8;
+            const endY = (leftRect.top - containerRect.top) + (leftRect.height / 2);
+
+            // Pfad zeichnen (geschwungen)
+            path.setAttribute('d', `M ${startX} ${startY} C ${startX-60} ${startY} ${endX+60} ${endY} ${endX} ${endY}`);
+
+            // Label mittig
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            text.setAttribute('x', midX);
+            text.setAttribute('y', midY + 1);
+            bg.setAttribute('x', midX - 40);
+            bg.setAttribute('y', midY - 11);
+        }
+    }
+
+    window.addEventListener('load', connectDivs);
+    window.addEventListener('resize', connectDivs);
+    setTimeout(connectDivs, 100);
+</script>
+</body>
+</html>

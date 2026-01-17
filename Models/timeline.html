@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeitplan Bachelorarbeit (20 Wochen)</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5; /* Indigo */
+            --secondary-color: #e0e7ff; /* Light Indigo */
+            --critical-color: #dc2626; /* Red for KI */
+            --critical-bg: #fee2e2; /* Light Red */
+            --text-color: #1f2937;
+            --grid-line-color: #e5e7eb;
+            --milestone-color: #2563eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 40px;
+            background-color: #f9fafb;
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 24px;
+            color: #111827;
+        }
+
+        /* Grid Layout Setup */
+        .gantt-wrapper {
+            display: grid;
+            /* Left column (Labels) is 220px fixed, Right side (Timeline) takes rest */
+            grid-template-columns: 220px 1fr;
+            gap: 0;
+            border: 1px solid var(--grid-line-color);
+            border-radius: 8px;
+            /* WICHTIG: Visible lassen, damit der Meilenstein rechts über den Rand ragen darf */
+            overflow: visible;
+            margin-bottom: 10px;
+        }
+
+        /* Header Row (Weeks) */
+        .timeline-header {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            background-color: #f3f4f6;
+            border-bottom: 1px solid var(--grid-line-color);
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: bold;
+            border-top-right-radius: 8px; /* Radius wiederherstellen, da overflow visible */
+        }
+
+        .header-cell {
+            padding: 10px 0;
+            text-align: center;
+            border-left: 1px solid var(--grid-line-color);
+        }
+        .header-cell:first-child { border-left: none; }
+
+        /* Task Rows */
+        .task-row {
+            display: contents;
+        }
+
+        .task-label {
+            padding: 15px 20px;
+            font-weight: 600;
+            background-color: #fff;
+            border-bottom: 1px solid var(--grid-line-color);
+            border-right: 1px solid var(--grid-line-color);
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .task-timeline {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            background-color: #fff;
+            border-bottom: 1px solid var(--grid-line-color);
+            position: relative;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        /* Vertical Grid Lines in Background */
+        .grid-lines {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .grid-line {
+            border-left: 1px solid #f3f4f6;
+            height: 100%;
+        }
+        .grid-line:first-child { border-left: none; }
+
+        /* The Actual Bars */
+        .bar {
+            height: 30px;
+            border-radius: 6px;
+            background-color: var(--secondary-color);
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 10px;
+        }
+
+        /* Specific Styles */
+        .bar.critical {
+            background-color: var(--critical-bg);
+            border-color: var(--critical-color);
+            color: var(--critical-color);
+        }
+
+        .bar.docu {
+            background-color: #f0f9ff;
+            border-color: #0ea5e9;
+            color: #0369a1;
+        }
+
+        .milestone-wrapper {
+            grid-column: 20;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            /* Stellt sicher, dass er über dem Grid liegt */
+            z-index: 10;
+        }
+
+        .milestone {
+            width: 24px;
+            height: 24px;
+            background-color: var(--milestone-color);
+            transform: rotate(45deg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            position: absolute;
+            /* -12px ist genau die Hälfte der Breite (24px), damit die Mitte auf der Linie liegt */
+            right: -12px;
+            top: 50%;
+            margin-top: -12px; /* Vertikal zentrieren */
+        }
+
+        .milestone-label {
+            position: absolute;
+            top: 35px; /* Unter dem Diamanten */
+            right: -30px; /* Zentriert unter dem Diamanten */
+            width: 60px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--milestone-color);
+            white-space: nowrap;
+            background-color: rgba(255,255,255,0.8);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        /* Legend */
+        .legend {
+            /* Mehr Abstand nach oben, damit das Abgabe-Label Platz hat */
+            margin-top: 50px;
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #4b5563;
+            justify-content: center;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .dot { width: 12px; height: 12px; border-radius: 4px; }
+
+        /* Months overlay */
+        .months-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            margin-left: 220px;
+            border-bottom: 1px solid var(--grid-line-color);
+            background: #f9fafb;
+            font-weight: bold;
+            color: #374151;
+            font-size: 13px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+        .month-cell {
+            padding: 8px;
+            text-align: center;
+            border-left: 1px solid #e5e7eb;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Zeitplan der Bachelorarbeit (20 Wochen)</h1>
+
+    <!-- Month Header -->
+    <div class="months-row">
+        <div class="month-cell">Monat 1</div>
+        <div class="month-cell">Monat 2</div>
+        <div class="month-cell">Monat 3</div>
+        <div class="month-cell">Monat 4</div>
+        <div class="month-cell">Monat 5</div>
+    </div>
+
+    <div class="gantt-wrapper">
+        <!-- Header corner -->
+        <div style="background: #f3f4f6; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; border-top-left-radius: 8px;"></div>
+
+        <!-- Header Weeks -->
+        <div class="timeline-header">
+            <div class="header-cell">KW1</div><div class="header-cell">KW2</div><div class="header-cell">KW3</div><div class="header-cell">KW4</div>
+            <div class="header-cell">KW5</div><div class="header-cell">KW6</div><div class="header-cell">KW7</div><div class="header-cell">KW8</div>
+            <div class="header-cell">KW9</div><div class="header-cell">KW10</div><div class="header-cell">KW11</div><div class="header-cell">KW12</div>
+            <div class="header-cell">KW13</div><div class="header-cell">KW14</div><div class="header-cell">KW15</div><div class="header-cell">KW16</div>
+            <div class="header-cell">KW17</div><div class="header-cell">KW18</div><div class="header-cell">KW19</div><div class="header-cell">KW20</div>
+        </div>
+
+        <!-- Row 1: Grundlagen -->
+        <div class="task-row">
+            <div class="task-label">Grundlagen</div>
+            <div class="task-timeline">
+                <div class="grid-lines">
+                    <div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div>
+                    <div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div>
+                    <div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div>
+                    <div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div>
+                </div>
+                <div class="bar" style="grid-column: 1 / span 6;">Recherche & Modellierung</div>
+            </div>
+        </div>
+
+        <!-- Row 2: Deterministik -->
+        <div class="task-row">
+            <div class="task-label">Deterministik</div>
+            <div class="task-timeline">
+                <div class="grid-lines"><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div></div>
+                <div class="bar" style="grid-column: 4 / span 7;">Entwicklung Matcher</div>
+            </div>
+        </div>
+
+        <!-- Row 3: KI-Methode -->
+        <div class="task-row">
+            <div class="task-label">KI-Methode</div>
+            <div class="task-timeline">
+                <div class="grid-lines"><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div></div>
+                <div class="bar critical" style="grid-column: 8 / span 9;">KI-Implementierung</div>
+            </div>
+        </div>
+
+        <!-- Row 4: Evaluation -->
+        <div class="task-row">
+            <div class="task-label">Evaluation</div>
+            <div class="task-timeline">
+                <div class="grid-lines"><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div></div>
+                <div class="bar" style="grid-column: 14 / span 6;">Goldstandard & Analyse</div>
+            </div>
+        </div>
+
+        <!-- Row 5: Dokumentation -->
+        <div class="task-row">
+            <div class="task-label">Dokumentation</div>
+            <div class="task-timeline">
+                <div class="grid-lines"><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div><div class="grid-line"></div></div>
+                <div class="bar docu" style="grid-column: 1 / span 20;">Schreiben (begleitend)</div>
+
+                <!-- Milestone aligned to end of week 20 -->
+                <div class="milestone-wrapper">
+                    <div class="milestone"></div>
+                    <span class="milestone-label">Abgabe</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background: var(--secondary-color); border: 1px solid var(--primary-color);"></div> Standard</div>
+        <div class="legend-item"><div class="dot" style="background: var(--critical-bg); border: 1px solid var(--critical-color);"></div> KI-Fokus (Intensiv)</div>
+        <div class="legend-item"><div class="dot" style="background: #f0f9ff; border: 1px solid #0ea5e9;"></div> Dokumentation</div>
+        <div class="legend-item"><div class="dot" style="background: var(--milestone-color);"></div> Meilenstein</div>
+    </div>
+
+</div>
+
+</body>
+</html>
