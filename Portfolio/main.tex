@@ -1,0 +1,361 @@
+\documentclass[12pt,oneside,a4paper,parskip=half]{scrbook}
+
+% --- Language & Basic Config ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman,english]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{csquotes}
+\usepackage{hyphenat}
+\usepackage{newunicodechar}
+\newunicodechar{ }{\,}
+
+% --- Layout ---
+\usepackage[a4paper,left=20mm,right=20mm,top=20mm,bottom=25mm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\sloppy
+
+% --- Graphics & Plots ---
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shadows,patterns}
+
+% --- Math & Tables ---
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{placeins}
+\graphicspath{{./}{./figures/}}
+
+% --- Listings ---
+\usepackage{xcolor}
+\usepackage{listings}
+\colorlet{punct}{red!60!black}
+\definecolor{background}{HTML}{EEEEEE}
+\definecolor{delim}{RGB}{20,105,176}
+\colorlet{numb}{magenta!60!black}
+\definecolor{pblue}{rgb}{0.13,0.13,1}
+\definecolor{pgreen}{rgb}{0,0.5,0}
+\definecolor{pred}{rgb}{0.9,0,0}
+\definecolor{pgrey}{rgb}{0.46,0.45,0.48}
+
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\scriptsize,
+  stepnumber=1,
+  numbersep=8pt,
+  backgroundcolor=\color{background},
+  commentstyle=\color{pgrey}\itshape,
+  keywordstyle=\color{pblue},
+  stringstyle=\color{pred},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=2,
+  keepspaces=true,
+  linewidth=\textwidth
+}
+
+\lstset{style=code}
+
+% --- Metadata Definitions ---
+\def\BaAuthor{Noah Raupold, Mohammad Ayoubi,\\ Jonathan Berwind}
+\def\BaAuthorPDF{Noah Raupold, Mohammad Ayoubi, Jonathan Berwind}
+\def\BaStudyProgram{Computer Science}
+\def\BaType{AI \& Security Project III}
+\def\BaTitle{Next-Gen Network Intrusion Detection}
+\def\BaSubtitle{Self-Supervised Vector Space Engineering with DINO \& SwiGLU}
+\def\BaDeadline{\today}
+
+\newcommand{\TitleGraphic}{%
+  \IfFileExists{logo.png}{%
+    \includegraphics[width=0.4\textwidth]{logo.png}%
+  }{%
+    \fbox{\parbox[c][3cm][c]{0.4\textwidth}{\centering Logo.png placeholder}}%
+  }%
+}
+
+\newcommand*{\forcetwosidetitle}{
+  \begingroup
+  \cleardoubleoddpage
+  \KOMAoptions{titlepage=true}
+  \csname @twosidetrue\endcsname
+  \maketitle
+  \endgroup
+}
+
+% --- Hyperlinks ---
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  filecolor=magenta,
+  urlcolor=cyan,
+  pdfauthor={\BaAuthorPDF},
+  pdftitle={\BaTitle},
+  pdfsubject={Network Security}
+}
+
+\begin{document}
+
+% --- Front Matter ---
+\selectlanguage{english}
+\frontmatter
+\titlehead{Technische Hochschule Würzburg-Schweinfurt\\Faculty of Computer Science and Business Information Systems}
+\subject{\BaType}
+\title{\texorpdfstring{\BaTitle\\[5mm]\normalsize{\BaSubtitle}\\[15mm]\TitleGraphic}{\BaTitle}}
+\author{\BaAuthor}
+\date{Submitted: \BaDeadline}
+\forcetwosidetitle
+
+\tableofcontents
+
+% --- Main Matter ---
+\mainmatter
+
+\chapter{Introduction}
+
+\section{The Cyber Security Challenge}
+Modern network infrastructures face an evolving landscape of cyber threats. Traditional Intrusion Detection Systems (IDS) often rely on signature-based methods or shallow machine learning models (like Logistic Regression), which struggle with:
+\begin{enumerate}
+    \item \textbf{Zero-Day Attacks:} Detecting novel attack vectors not seen during training.
+    \item \textbf{Extreme Class Imbalance:} In the NSL-KDD dataset, critical attacks like \textit{User-to-Root (U2R)} and \textit{Remote-to-Local (R2L)} represent less than 1\% of the traffic, leading to "Zero Recall" in standard models.
+\end{enumerate}
+
+\section{Project Objective}
+This project introduces a **"Supervised Vector Space Engineering"** pipeline. Instead of simple classification, we warp the feature space using **Self-Supervised Learning (DINO)** and **Gram Matrix Analysis** to maximize the separation between normal traffic and rare anomalies. The final classification is performed by a Deep Neural Network enhanced with **SwiGLU activations**.
+
+\chapter{Architecture: DINO & Gram Anchoring}
+
+To learn robust features from imbalanced data, we implemented a Teacher-Student architecture inspired by DINO (Self-Distillation with No Labels), adapted for tabular data.
+
+\section{The Pipeline Overview}
+The system operates in two phases:
+1.  **Pre-Training (Self-Supervised):** The model learns the structure of network traffic without labels using a masked autoencoder approach and metric learning.
+2.  **Fine-Tuning (Supervised):** A specialized SwiGLU head is trained on the frozen features to classify the 5 categories (Normal, DoS, Probe, U2R, R2L).
+
+% --- TIKZ: DINO ARCHITECTURE ---
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\textwidth}
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    auto,
+    block/.style={
+        rectangle, 
+        draw, 
+        fill=white, 
+        text width=7em, 
+        text centered, 
+        rounded corners, 
+        minimum height=3em,
+        drop shadow
+    },
+    line/.style={
+        draw, -Latex, thick
+    },
+    teacher/.style={
+        draw, dashed, inner sep=0.3cm, rounded corners, fill=yellow!10
+    },
+    student/.style={
+        draw, dashed, inner sep=0.3cm, rounded corners, fill=blue!10
+    }
+]
+
+    % Input
+    \node [block, fill=gray!20] (input) {Raw Traffic Data\\(NSL-KDD)};
+    \node [block, below left=1.5cm and 1cm of input, fill=red!10] (mask) {Gram Masking\\(Noise Injection)};
+    
+    % Student Branch
+    \node [block, below=1cm of mask, fill=blue!20] (s_enc) {Student Encoder\\(Tabular ViT)};
+    \node [block, below=1cm of s_enc] (s_head) {DINO Head\\+ MIM Head};
+    
+    % Teacher Branch
+    \node [block, right=4cm of s_enc, fill=orange!20] (t_enc) {Teacher Encoder\\(EMA Update)};
+    \node [block, below=1cm of t_enc] (t_head) {DINO Head};
+
+    % Losses
+    \node [circle, draw, fill=white, below=2cm of s_head] (loss) {$\mathcal{L}$};
+    
+    % Connections
+    \path [line] (input) -- (mask);
+    \path [line] (mask) -- (s_enc);
+    \path [line] (input) -| node[near start] {Unmasked View} (t_enc);
+    
+    \path [line] (s_enc) -- (s_head);
+    \path [line] (t_enc) -- (t_head);
+    
+    \path [line] (s_head) -- node[left] {Prediction} (loss);
+    \path [line] (t_head) |- node[near start] {Target (Sinkhorn)} (loss);
+    
+    % EMA Arrow
+    \draw [->, thick, dashed] (s_enc) -- node[above] {EMA Weights $\lambda=0.996$} (t_enc);
+
+    % Loss Annotations
+    \node [right=0.5cm of loss, text width=6cm, font=\small] (losstext) {
+        \textbf{Loss Components:}\\
+        1. DINO Loss (Cross-Entropy)\\
+        2. MIM Loss (Reconstruction)\\
+        3. KoLeo Loss (Diversity)\\
+        4. Gram Matrix Loss (Correlation)
+    };
+
+    % Backgrounds
+    \begin{scope}[on background layer]
+        \node[student, fit=(mask) (s_enc) (s_head), label=above:\textbf{Student Branch}] {};
+        \node[teacher, fit=(t_enc) (t_head), label=above:\textbf{Teacher Branch}] {};
+    \end{scope}
+
+\end{tikzpicture}
+\end{adjustbox}
+\caption{The Self-Supervised Training Pipeline. The Student network attempts to reconstruct masked features and match the Teacher's class-agnostic representation. The Gram Matrix Loss ensures the student preserves feature correlations.}
+\label{fig:dino_archi}
+\end{figure}
+
+\section{SwiGLU Classification Head}
+For the final classification, we replace standard ReLU layers with **SwiGLU** (Swish-Gated Linear Unit). This gating mechanism allows the network to dynamically select relevant features, which is crucial for distinguishing subtle U2R attacks from normal traffic.
+
+% --- TIKZ: SWIGLU ---
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm,
+    block/.style={rectangle, draw, fill=white, text width=6em, text centered, rounded corners, minimum height=2.5em},
+    op/.style={circle, draw, fill=gray!10, minimum size=1.5em, inner sep=1pt},
+    line/.style={draw, -Latex, thick}
+]
+    \node (in) {Input $x$};
+    \node [block, below=0.8cm of in] (split) {Linear Split};
+    
+    \node [block, below left=1cm and 0.5cm of split] (gate) {Linear $W_g$};
+    \node [block, below right=1cm and 0.5cm of split] (val) {Linear $W_v$};
+    
+    \node [block, below=0.5cm of gate, fill=green!10] (act) {Swish $\sigma(x)$};
+    
+    \node [op, below=2cm of split] (mult) {$\otimes$};
+    
+    \node [block, below=0.8cm of mult] (out_proj) {Linear $W_{out}$};
+    \node [below=0.5cm of out_proj] (final) {Output};
+
+    % Connections
+    \path [line] (in) -- (split);
+    \path [line] (split) -| (gate);
+    \path [line] (split) -| (val);
+    \path [line] (gate) -- (act);
+    \path [line] (act) -- (mult);
+    \path [line] (val) |- (mult);
+    \path [line] (mult) -- (out_proj);
+    \path [line] (out_proj) -- (final);
+    
+    \node [right=2cm of mult, text width=5cm] {
+        \textbf{Formula:}\\
+        $\text{SwiGLU}(x) = (xW_g \cdot \sigma) \otimes (xW_v) W_{out}$
+    };
+
+\end{tikzpicture}
+\caption{The SwiGLU Block structure used in the classifier head. The parallel paths act as a learnable gate.}
+\end{figure}
+
+\chapter{Implementation Code}
+
+The implementation utilizes PyTorch. Below is the core logic for the DINO Loss and the Gram Matrix Loss integration.
+
+\begin{lstlisting}[language=Python, caption=Dinov3 Loss Implementation]
+class DINOLoss(nn.Module):
+    def __init__(self, out_dim, teacher_temp=0.04, student_temp=0.1):
+        super().__init__()
+        self.student_temp = student_temp
+        self.teacher_temp = teacher_temp
+        self.center = nn.Parameter(torch.zeros(1, out_dim), requires_grad=False)
+
+    def forward(self, student_output, teacher_output):
+        # Teacher sharpening
+        t_out = F.softmax((teacher_output - self.center) / self.teacher_temp, dim=-1)
+        t_out = t_out.detach() # Stop gradient
+        
+        # Student log-softmax
+        s_out = F.log_softmax(student_output / self.student_temp, dim=-1)
+        
+        return -torch.sum(t_out * s_out, dim=-1).mean()
+
+def compute_gram_loss(student_seq, teacher_seq):
+    # Calculate feature correlations (Gram Matrix)
+    s = F.normalize(student_seq, p=2, dim=-1)
+    t = F.normalize(teacher_seq.detach(), p=2, dim=-1)
+    
+    g_s = torch.bmm(s, s.transpose(1, 2))
+    g_t = torch.bmm(t, t.transpose(1, 2))
+    
+    return F.mse_loss(g_s, g_t)
+\end{lstlisting}
+
+\chapter{Evaluation & Results}
+
+The model was evaluated on the **NSL-KDD Test+** dataset. We specifically focused on the F1-Score for the minority classes (U2R, R2L), which are typically missed by traditional models.
+
+\section{Metric Analysis}
+The combination of DINO pre-training and SwiGLU fine-tuning yielded significant improvements over the baseline.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
+        \midrule
+        DoS & 0.96 & 0.84 & \textbf{0.90} & 7458 \\
+        Normal & 0.80 & 0.94 & 0.87 & 9711 \\
+        Probe & 0.81 & 0.91 & 0.86 & 2421 \\
+        R2L & 0.66 & 0.41 & \textbf{0.50} & 2887 \\
+        U2R & 0.28 & 0.67 & \textbf{0.39} & 67 \\
+        \midrule
+        \textbf{Accuracy} & & & \textbf{83.53\%} & 22544 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Final Evaluation on NSL-KDD Test Set. Note the non-zero F1-score for U2R (0.39) and R2L (0.50), which is a major improvement over standard baselines.}
+    \label{tab:results}
+\end{table}
+
+\section{Visualizing Performance}
+The confusion matrix highlights the model's ability to distinguish between normal traffic and attacks, achieving a binary classification accuracy of **87.54\%**.
+
+% --- TIKZ: METRICS VISUALIZATION ---
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    \begin{axis}[
+        ybar,
+        bar width=0.8cm,
+        symbolic x coords={DoS, Normal, Probe, R2L, U2R},
+        xtick=data,
+        ylabel={F1-Score},
+        ymin=0, ymax=1,
+        nodes near coords,
+        title={Per-Class Performance (F1-Score)},
+        width=\textwidth,
+        height=7cm,
+        grid=major
+    ]
+    \addplot[fill=blue!50] coordinates {
+        (DoS,0.90) 
+        (Normal,0.87) 
+        (Probe,0.86) 
+        (R2L,0.50) 
+        (U2R,0.39)
+    };
+    \end{axis}
+\end{tikzpicture}
+\caption{F1-Score distribution across classes. While DoS and Normal traffic are detected with high reliability, the model also maintains detection capability for the rare U2R class.}
+\end{figure}
+
+\chapter{Conclusion}
+This portfolio demonstrated that **Supervised Vector Space Engineering**—combining DINO-based self-supervision with Gram Anchoring—effectively mitigates the class imbalance problem in network intrusion detection. The implementation achieved a robust **83.53\% multiclass accuracy**, proving that Deep Learning architectures can outperform traditional statistical methods in cybersecurity domains.
+
+\end{document}
