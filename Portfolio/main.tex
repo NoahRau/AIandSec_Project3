@@ -11,7 +11,7 @@
 \usepackage{newunicodechar}
 
 % --- Layout ---
-\usepackage[a4paper,left=20mm,right=20mm,top=20mm,bottom=25mm]{geometry}
+\usepackage[a4paper,left=25mm,right=25mm,top=25mm,bottom=30mm]{geometry}
 \usepackage{setspace}
 \onehalfspacing
 \sloppy
@@ -20,6 +20,7 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.17}
 \usepackage{tikz}
+\usepackage{adjustbox}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shadows,patterns}
 
 % --- Math & Tables ---
@@ -30,7 +31,7 @@
 \usepackage{longtable}
 \usepackage{tabularx}
 \usepackage{placeins}
-\usepackage{colortbl} % For table highlighting
+\usepackage{colortbl}
 \usepackage{caption}
 \captionsetup[table]{skip=10pt}
 
@@ -83,7 +84,7 @@
     \IfFileExists{Logo.png}{%
         \includegraphics[width=0.5\textwidth]{Logo.png}%
     }{%
-        \fbox{\parbox[c][3cm][c]{0.5\textwidth}{Logo.png fehlt}}%
+        \fbox{\parbox[c][3cm][c]{0.5\textwidth}{\centering Logo.png placeholder}}%
     }%
 }
 
@@ -128,55 +129,62 @@
     \chapter{Introduction}
 
     \section{The Cyber Security Challenge}
-    Modern network infrastructures face an evolving landscape of cyber threats. Traditional Intrusion Detection Systems (IDS) often rely on signature-based methods or shallow machine learning models (like Logistic Regression). Our analysis of the \textbf{NSL-KDD} dataset identified critical failures in these baselines:
+    Modern network infrastructures face an evolving landscape of cyber threats. Traditional Intrusion Detection Systems (IDS) typically process low-level connection features—such as \textbf{Duration, Service type, Byte counts, and Flags}—using signature-based methods or shallow machine learning models like Logistic Regression.
+
+    However, our comprehensive analysis of the \textbf{NSL-KDD} dataset reveals a critical vulnerability in these conventional approaches:
     \begin{enumerate}
-        \item \textbf{Data Problem:} Extreme Class Imbalance. Normal and DoS traffic comprise $>98\%$ of the data, while critical attacks like \textit{User-to-Root (U2R)} and \textit{Remote-to-Local (R2L)} represent $<0.5\%$.
-        \item \textbf{Statistical Bias:} Standard models minimize global loss by favoring majority classes, leading to high accuracy on "Normal" traffic but failing to detect critical intrusions (False Negatives).
+        \item \textbf{Extreme Class Imbalance:} The dataset is heavily skewed. Harmless traffic (Normal) and volumetric Denial of Service (DoS) attacks comprise over \textbf{98\%} of the data. Critical, stealthy attacks like \textit{User-to-Root (U2R)} and \textit{Remote-to-Local (R2L)} represent less than \textbf{0.5\%}.
+        \item \textbf{The False Negative Trap:} Standard models minimize global loss by favoring majority classes. While this yields high overall accuracy ($>90\%$), it masks a catastrophic failure: the inability to detect the rare, high-impact intrusions. In a real-world security context, missing a root compromise (False Negative) is far more dangerous than a false alarm.
     \end{enumerate}
 
     \section{Project Objective}
-    This project introduces a **"Supervised Vector Space Engineering"** pipeline. Instead of simple classification, we warp the feature space using **Self-Supervised Learning (DINOv3)** and **Gram Matrix Analysis** to maximize the separation between normal traffic and rare anomalies. The final classification is performed by a Deep Neural Network enhanced with **SwiGLU activations**.
+    This project aims to develop a robust anomaly classifier that transcends the limitations of imbalance. We introduce a **"Supervised Vector Space Engineering"** pipeline. Instead of simple classification, we warp the feature space using **Self-Supervised Learning (DINOv3)** and **Gram Matrix Analysis** to maximize the separation between normal traffic and rare anomalies like Buffer Overflows or Rootkits. The final classification is performed by a Deep Neural Network enhanced with **SwiGLU activations**.
 
     \chapter{Architecture: The Pipeline}
 
     Our solution transitions from linear models to Deep Learning with Attention Mechanisms. The architecture consists of a robust preprocessing pipeline followed by a Teacher-Student training loop.
 
-    \section{Data \& Preprocessing Pipeline}
-    Before training, raw network data undergoes state-of-the-art (SOTA) preprocessing to handle skewness and feature engineering.
+    \section{Correlation-Aware Cluster Masking}
+    A key innovation in our approach is the masking strategy. Standard Transformers (like BERT) use random token masking. However, tabular features often exhibit high inter-correlation (e.g., \texttt{srv\_count} vs. \texttt{dst\_host\_count}). Random masking allows the model to "cheat" by reconstructing a masked feature purely from its visible, highly correlated neighbor (leakage).
+
+    To prevent this, we introduce **Correlation-Aware Cluster Masking**. Based on a preliminary Gram Matrix analysis, we identified 6 distinct feature clusters. During pre-training, we mask entire clusters simultaneously with a probability of $p=0.4$. This forces the model to learn global traffic semantics rather than local statistical shortcuts.
 
 % --- TIKZ: PREPROCESSING PIPELINE ---
     \begin{figure}[H]
         \centering
-        \begin{tikzpicture}[
-            node distance=1.0cm,
-            block/.style={rectangle, draw, fill=blue!10, text width=12em, text centered, rounded corners, minimum height=3em, drop shadow},
-            arrow/.style={-Latex, thick}
-        ]
-            \node (raw) [block, fill=gray!20] {\textbf{Raw Data}\\(network\_connections.csv)};
-            \node (split) [block, below=of raw] {Train/Test Split};
+% Resizebox fixes layout issues by scaling the tikzpicture to textwidth
+        \resizebox{\textwidth}{!}{
+            \begin{tikzpicture}[
+                node distance=1.2cm,
+                block/.style={rectangle, draw, fill=blue!10, text width=19em, text centered, rounded corners, minimum height=2.5em, drop shadow},
+                arrow/.style={-Latex, thick}
+            ]
+                \node (raw) [block, fill=gray!20] {\textbf{Raw Data}\\(network\_connections.csv)};
+                \node (split) [block, below=of raw] {Train/Test Split};
 
-            \node (log) [block, below=of split] {\textbf{Log Transform}\\(Skewed Features)};
-            \node (eng) [block, below=of log] {\textbf{Feature Engineering}\\(Byte Ratio, Srv Diff)};
-            \node (scale) [block, below=of eng] {\textbf{StandardScaler}};
-            \node (enc) [block, below=of scale] {\textbf{Label/Cat Encoding}};
+                \node (log) [block, below=of split] {\textbf{Log Transform}\\(Skewed Features)};
+                \node (eng) [block, below=of log] {\textbf{Feature Engineering}\\(Byte Ratio, Srv Diff)};
+                \node (scale) [block, below=of eng] {\textbf{StandardScaler}};
+                \node (enc) [block, below=of scale] {\textbf{Label/Cat Encoding}};
 
-            \node (gram) [block, below=of enc, fill=red!10] {\textbf{Gram Matrix Analysis}\\(Compute Feature Clusters)};
+                \node (gram) [block, below=of enc, fill=red!10] {\textbf{Gram Matrix Analysis}\\(Compute Feature Clusters)};
 
-            \draw [arrow] (raw) -- (split);
-            \draw [arrow] (split) -- (log);
-            \draw [arrow] (log) -- (eng);
-            \draw [arrow] (eng) -- (scale);
-            \draw [arrow] (scale) -- (enc);
-            \draw [arrow] (enc) -- (gram);
+                \draw [arrow] (raw) -- (split);
+                \draw [arrow] (split) -- (log);
+                \draw [arrow] (log) -- (eng);
+                \draw [arrow] (eng) -- (scale);
+                \draw [arrow] (scale) -- (enc);
+                \draw [arrow] (enc) -- (gram);
 
-            % Grouping box
-            \node[draw, dashed, inner sep=0.5cm, fit=(log) (gram), label=left:\rotatebox{90}{\textbf{SOTA Preprocessing}}] {};
+                % Grouping box
+                \node[draw, dashed, inner sep=0.6cm, fit=(log) (gram), label=left:\rotatebox{90}{\textbf{SOTA Preprocessing}}] {};
 
-        \end{tikzpicture}
+            \end{tikzpicture}
+        }
         \caption{The Data Preprocessing Pipeline utilizing Gram Matrix Analysis for feature clustering.}
     \end{figure}
 
-    \section{DINOv3 & Gram Anchoring Strategy}
+    \section{DINOv3 \& Gram Anchoring Strategy}
     To learn robust features from imbalanced data, we implemented a Teacher-Student architecture (DINO) adapted for tabular data.
 
     \textbf{Core Components:}
@@ -188,37 +196,41 @@
             \item \textbf{DINO Loss:} Global alignment (Sinkhorn Knopp centering).
             \item \textbf{MIM Loss:} Masked Image Modeling (Reconstruction of masked tokens).
             \item \textbf{KoLeo Loss:} Enforces feature diversity in the batch.
-            \item \textbf{Gram Matrix Loss:} Preserves structural correlations between features.
+            \item \textbf{Gram Matrix Loss:} To explicitly force the Student to capture the correlation structure of the Teacher's representations, we minimize the Mean Squared Error between their Gram Matrices:
+            \begin{equation}
+                \mathcal{L}_{Gram} = \frac{1}{N^2} \sum_{i,j} (G_{Student}^{i,j} - G_{Teacher}^{i,j})^2
+            \end{equation}
+            where $G = Z \cdot Z^T$ represents the pairwise token correlations.
         \end{enumerate}
     \end{itemize}
 
 % --- TIKZ: DINO ARCHITECTURE ---
     \begin{figure}[H]
         \centering
-        \begin{adjustbox}{max width=\textwidth}
+        \resizebox{\textwidth}{!}{
             \begin{tikzpicture}[
-                node distance=1.5cm,
+                node distance=2cm,
                 auto,
-                block/.style={rectangle, draw, fill=white, text width=7em, text centered, rounded corners, minimum height=3em, drop shadow},
+                block/.style={rectangle, draw, fill=white, text width=9em, text centered, rounded corners, minimum height=4em, drop shadow},
                 line/.style={draw, -Latex, thick},
-                teacher/.style={draw, dashed, inner sep=0.3cm, rounded corners, fill=yellow!10},
-                student/.style={draw, dashed, inner sep=0.3cm, rounded corners, fill=blue!10}
+                teacher/.style={draw, dashed, inner sep=0.5cm, rounded corners, fill=yellow!10},
+                student/.style={draw, dashed, inner sep=0.5cm, rounded corners, fill=blue!10}
             ]
 
                 % Input
                 \node [block, fill=gray!20] (input) {Preprocessing Output};
-                \node [block, below left=1.5cm and 1cm of input, fill=red!10] (mask) {Gram Masking\\(Noise Injection)};
+                \node [block, below left=2cm and 1cm of input, fill=red!10] (mask) {Gram Masking\\(Noise Injection)};
 
                 % Student Branch
-                \node [block, below=1cm of mask, fill=blue!20] (s_enc) {Student Encoder\\(Tabular ViT)};
-                \node [block, below=1cm of s_enc] (s_head) {Heads:\\DINO + MIM};
+                \node [block, below=1.5cm of mask, fill=blue!20] (s_enc) {Student Encoder\\(Tabular ViT)};
+                \node [block, below=1.5cm of s_enc] (s_head) {Heads:\\DINO + MIM};
 
                 % Teacher Branch
-                \node [block, right=4cm of s_enc, fill=orange!20] (t_enc) {Teacher Encoder\\(EMA Update)};
-                \node [block, below=1cm of t_enc] (t_head) {Head:\\DINO};
+                \node [block, right=5cm of s_enc, fill=orange!20] (t_enc) {Teacher Encoder\\(EMA Update)};
+                \node [block, below=1.5cm of t_enc] (t_head) {Head:\\DINO};
 
                 % Losses
-                \node [circle, draw, fill=white, below=2cm of s_head] (loss) {$\mathcal{L}$};
+                \node [circle, draw, fill=white, below=2.5cm of s_head, minimum size=1.5cm] (loss) {$\mathcal{L}$};
 
                 % Connections
                 \path [line] (input) -- (mask);
@@ -234,8 +246,9 @@
                 % EMA Arrow
                 \draw [->, thick, dashed] (s_enc) -- node[above] {EMA Weights} (t_enc);
 
+
                 % Loss Annotations
-                \node [right=0.5cm of loss, text width=6cm, font=\small, align=left] (losstext) {
+                \node [right=1cm of loss, yshift=-10mm, text width=7cm, font=\small, align=left] (losstext) {
                     \textbf{Optimization Objectives:}\\
                     1. DINO Loss (Cross-Entropy)\\
                     2. MIM Loss (Reconstruction)\\
@@ -250,65 +263,59 @@
                 \end{scope}
 
             \end{tikzpicture}
-        \end{adjustbox}
+        }
         \caption{The Self-Supervised Training Architecture including KoLeo and Gram losses.}
         \label{fig:dino_archi}
     \end{figure}
 
     \section{Fine-Tuning: SwiGLU Classification Head}
-    For the final classification, we replace standard ReLU layers with **SwiGLU** (Swish-Gated Linear Unit). This gating mechanism filters noise in the latent representation before the final Softmax layer, improving gradient flow.
+    For the final classification, we replace standard ReLU layers with a **Deep SwiGLU Network**. SwiGLU (Swish-Gated Linear Unit) offers better gradient flow and representation capacity for tabular embeddings (Shazeer, 2020). Furthermore, we employ **RMSNorm** (Root Mean Square Layer Normalization) to stabilize training dynamics in deeper layers.
 
     \chapter{Implementation Details}
 
-    The implementation utilizes PyTorch. The core model relies on a custom `DINOLoss` for self-distillation and a `SwiGLU` activation for the classifier.
+    The implementation utilizes PyTorch. Below is the custom implementation of our **Gram Matrix Loss**, which enforces structural alignment between Student and Teacher representations.
 
-    \begin{lstlisting}[language=Python, caption=Dinov3 Loss & Architecture Implementation]
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+    \begin{lstlisting}[language=Python, caption=Custom Gram Matrix Loss Implementation]
+def compute_gram_loss(student_seq, teacher_seq):
+    # s, t shape: (Batch, N_Tokens, Embed_Dim)
 
-class DINOLoss(nn.Module):
-    def __init__(self, out_dim, teacher_temp=0.04, student_temp=0.1, center_momentum=0.9):
-        super().__init__()
-        self.student_temp = student_temp
-        self.teacher_temp = teacher_temp
-        self.center_momentum = center_momentum
-        self.register_buffer("center", torch.zeros(1, out_dim))
+    # Normalize for numerical stability
+    s = F.normalize(student_seq, p=2, dim=-1)
+    # Stop Gradient for Teacher to prevent collapse
+    t = F.normalize(teacher_seq.detach(), p=2, dim=-1)
 
-    def forward(self, student_output, teacher_output):
-        # Teacher sharpening (Sinkhorn-Knopp style)
-        t_out = F.softmax((teacher_output - self.center) / self.teacher_temp, dim=-1)
-        t_out = t_out.detach() # Stop gradient to teacher
+    # Compute Gram Matrices: (B, N, D) @ (B, D, N) -> (B, N, N)
+    # This represents the correlation map of all tokens
+    g_s = torch.bmm(s, s.transpose(1, 2))
+    g_t = torch.bmm(t, t.transpose(1, 2))
 
-        # Student log-softmax
-        s_out = F.log_softmax(student_output / self.student_temp, dim=-1)
-
-        # Update center
-        self.update_center(teacher_output)
-
-        return -torch.sum(t_out * s_out, dim=-1).mean()
-
-    @torch.no_grad()
-    def update_center(self, teacher_output):
-        batch_center = torch.sum(teacher_output, dim=0, keepdim=True)
-        batch_center = batch_center / len(teacher_output)
-        self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
-
-class SwiGLU(nn.Module):
-    """
-    Swish-Gated Linear Unit
-    Formula: SwiGLU(x) = (xW + b) * Swish(xV + c)
-    """
-    def __init__(self, dim_in, dim_out):
-        super().__init__()
-        self.w = nn.Linear(dim_in, dim_out)
-        self.v = nn.Linear(dim_in, dim_out)
-
-    def forward(self, x):
-        return self.w(x) * F.silu(self.v(x))
+    # Force Student to learn Teacher's correlation structure
+    return F.mse_loss(g_s, g_t)
     \end{lstlisting}
 
-    \chapter{Evaluation & Results}
+    \section{Hyperparameters}
+    Reproducibility is central to our work. Table \ref{tab:hyperparams} details the specific configuration used for the DINOv3-XY architecture. Note the use of **Layer-wise Learning Rate Decay** during fine-tuning.
+
+    \begin{table}[h]
+        \centering
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Parameter} & \textbf{Value} \\
+            \midrule
+            Embedding Dimension & 64 \\
+            Batch Size & 64 (Effective: 256 via Gradient Accum.) \\
+            Masking Ratio & 0.4 (Cluster-wise) \\
+            Pre-training Learning Rate & $1 \times 10^{-3}$ (AdamW) \\
+            Fine-tuning Head LR & $5 \times 10^{-4}$ \\
+            Fine-tuning Backbone LR & $5 \times 10^{-5}$ (Layer-wise Decay) \\
+            Projection Head Depth & 2 (SwiGLU) \\
+            \bottomrule
+        \end{tabular}
+        \caption{Hyperparameters for the Dinov3-XY Architecture.}
+        \label{tab:hyperparams}
+    \end{table}
+
+    \chapter{Evaluation \& Results}
 
     The model was evaluated on the **NSL-KDD Test+** dataset. We specifically focused on the F1-Score for the minority classes (U2R, R2L).
 
@@ -332,13 +339,8 @@ class SwiGLU(nn.Module):
         \caption{Binary Evaluation Metrics. The model achieves 87.54\% global accuracy on the binary task.}
     \end{table}
 
-    \section{Multiclass Performance}
+    \section{Multiclass Performance \& Trade-off Analysis}
     While the baseline Logistic Regression model failed to generalize on sparse data (Recall < 50\% on U2R), our Tabular ViT architecture maintains detection capabilities across all classes.
-
-    \begin{itemize}
-        \item \textbf{Matthews Correlation Coefficient (MCC):} 0.7578
-        \item \textbf{Global Accuracy:} 83.53\%
-    \end{itemize}
 
     \begin{table}[H]
         \centering
@@ -359,6 +361,16 @@ class SwiGLU(nn.Module):
         \caption{Final Multiclass Evaluation. Highlights include the non-zero F1-score for U2R (0.39) and R2L (0.50), significantly outperforming baselines which often yield 0.0.}
         \label{tab:results}
     \end{table}
+
+    \subsection{Discussion: The Precision-Recall Trade-off}
+    A critical analysis of the **U2R (User-to-Root)** class reveals a deliberate trade-off. While the Precision is relatively low (0.28), the **Recall is remarkably high at 67.16\%**.
+
+    In the context of cybersecurity, this is a desirable property. A low precision implies a higher rate of False Positives (alarms for benign traffic), which is a manageable nuisance for security analysts. However, a low Recall would imply False Negatives (missing an actual root compromise), which constitutes a catastrophic security breach. Our Gram Anchoring strategy successfully biases the model towards sensitivity for these critical threats.
+
+    \subsection{Granularity Limitations}
+    A further challenge identified in our experiments involves granularity. The dataset contains 41 specific attack signatures (e.g., \textit{buffer\_overflow}, \textit{rootkit}, \textit{loadmodule}) which are mapped to 5 broad categories.
+
+    While our model excels at the 5-class task, experiments attempting to predict the 41 signatures directly showed a significant drop in performance due to the extreme sparsity of specific signatures (some appearing less than 5 times). Future work will require few-shot learning techniques to address this granular imbalance.
 
     \section{Visualizing Performance}
     The confusion matrix highlights the model's ability to distinguish between normal traffic and attacks.
@@ -395,13 +407,21 @@ class SwiGLU(nn.Module):
         \caption{F1-Score distribution across classes. The model successfully detects rare attack vectors (R2L, U2R) that are usually missed.}
     \end{figure}
 
-    \chapter{Conclusion}
+    \chapter{Conclusion and Future Work}
     This portfolio demonstrated that **Supervised Vector Space Engineering**—combining DINO-based self-supervision with Gram Anchoring—effectively mitigates the class imbalance problem.
 
     \textbf{Key Findings:}
     \begin{enumerate}
-        \item \textbf{Robustness:} Successfully implemented a State-of-the-Art Transformer architecture for NIDS.
+        \item \textbf{Robustness:} Successfully implemented a State-of-the-Art Transformer architecture for NIDS that processes raw features like Duration and Service flags.
         \item \textbf{SSL Superiority:} Self-Supervised Learning (SSL) significantly outperforms baselines in high-imbalance scenarios, achieving a multiclass accuracy of \textbf{83.53\%} and detecting 67\% of U2R attacks (Recall), whereas standard models often achieve 0\%.
     \end{enumerate}
+
+    \section{Future Work}
+    To further improve detection of minority classes like U2R, future iterations could implement:
+    \begin{itemize}
+        \item \textbf{Adaptive Focal Loss:} To dynamically down-weight easy examples (Normal/DoS) and focus training on hard misclassifications.
+        \item \textbf{Adversarial Training:} Since we calculate gradients for the Gram Loss, generating adversarial perturbations could harden the model against evasion attacks.
+        \item \textbf{Explainability (XAI):} Implementing "Attention Rollout" to visualize which specific packet features triggered an intrusion alert, aiding security analysts in forensics.
+    \end{itemize}
 
 \end{document}
