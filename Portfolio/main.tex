@@ -163,7 +163,7 @@
 
     Our solution transitions from rigid linear models to a flexible Deep Learning framework driven by Attention Mechanisms. The architecture consists of a robust preprocessing pipeline followed by a Teacher-Student training loop designed to handle the specific geometric challenges of tabular data.
 
-    \subsection{Logarithmic Normalization (The Skew Problem)}
+    \section{Logarithmic Normalization (The Skew Problem)}
     Network features like \texttt{src\_bytes} (bytes sent) and \texttt{duration} follow a **heavy-tailed power-law distribution**. A single file transfer can involve gigabytes of data ($10^9$), while a heartbeat ping involves mere bytes ($10^1$).
     Feeding these raw values into a neural network causes \textbf{exploding gradients}, as the magnitude of the update is proportional to the input size. To compress this dynamic range, we apply a log-transformation to skewed columns:
     \begin{equation}
@@ -171,7 +171,7 @@
     \end{equation}
     The $+1$ term prevents mathematical errors when inputs are zero. This transforms the feature space from a spanning orders of magnitude into a compact, near-normal distribution.
 
-    \subsection{Z-Score Standardization (The Scale Problem)}
+    \section{Z-Score Standardization (The Scale Problem)}
     Deep Learning optimizers (like AdamW) assume that all features exist on a similar scale. If \textit{Duration} ranges from $[0, 1]$ and \textit{Bytes} ranges from $[0, 10000]$, the optimizer will be biased towards minimizing errors in the \textit{Bytes} column simply because the numbers are larger.
     We apply Standard Scaling to center all continuous features around zero with unit variance:
     \begin{equation}
@@ -179,21 +179,21 @@
     \end{equation}
     This ensures that the attention mechanism calculates relevance based on \textbf{informational content}, not numerical magnitude.
 
-    \subsection{Categorical Encoding (The Vocabulary Problem)}
+    \section{Categorical Encoding (The Vocabulary Problem)}
     The dataset contains symbolic features such as \textit{Protocol} (TCP/UDP) and \textit{Service} (HTTP, FTP). Neural networks cannot process strings. We map these distinct categories to integer indices ($v \in \mathbb{Z}$).
     Unlike "One-Hot Encoding," which creates sparse, high-dimensional vectors that waste memory, we utilize **Label Encoding** followed by a learnable **Embedding Layer** inside the Transformer. This allows the model to learn a dense vector representation for "HTTP" that is geometrically closer to "HTTPS" than to "FTP," capturing semantic similarity.
 
     \section{The Failure of Random Noise: Why we need Cluster Masking}
     A critical failure point in applying standard Transformers (like BERT) to tabular data is the masking strategy. In Natural Language Processing (NLP), words are discrete and not strictly deterministic of their neighbors. However, network traffic features exhibit **high multicollinearity** (e.g., \texttt{srv\_count} is statistically locked to \texttt{dst\_host\_count}).
 
-    \subsection{The "Leaky" Feature Space}
+    \section{The "Leaky" Feature Space}
     If we apply standard random masking (independent Bernoulli noise), we inadvertently introduce **information leakage**.
     \begin{itemize}
         \item \textbf{The Trivial Solution:} If the model masks Feature A but leaves its highly correlated neighbor Feature B visible, the network minimizes the reconstruction loss simply by copying B to A.
         \item \textbf{Manifold Collapse:} Because the model finds this "shortcut," it stops trying to learn the deeper, non-linear relationships between disparate features (e.g., the relationship between \textit{Protocol Type} and \textit{Traffic Volume}). The resulting feature space "collapses"—it becomes a shallow representation of surface-level statistics rather than a robust geometric map of attack behaviors.
     \end{itemize}
 
-    \subsection{Solution: Gram-Anchored Masking}
+    \section{Solution: Gram-Anchored Masking}
     To force the model to learn the true latent structure of the data, we introduce **Correlation-Aware Cluster Masking**.
     Prior to training, we perform a **Gram Matrix Analysis** to mathematically identify groups of highly correlated features. We detected 6 distinct clusters in the NSL-KDD dataset. During the pre-training phase, instead of masking individual cells, we mask \textbf{entire clusters simultaneously} with a probability of $p=0.4$.
 
@@ -235,10 +235,10 @@
         \label{fig:preprocessing_pipeline}
     \end{figure}
 
-    \section{DINOv3 \& Gram Anchored Training Loop}
+    \chapter{DINOv3 \& Gram Anchored Training Loop}
     To warp the feature space into a manifold where rare attacks are separable, we implement a modified **DINO (Distillation with No Labels)** architecture. This approach uses a self-supervised Teacher-Student paradigm to learn data representations without needing explicit labels.
 
-    \subsection{The Teacher-Student Dynamics}
+    \section{The Teacher-Student Dynamics}
     The architecture consists of two identical Transformer networks:
     \begin{itemize}
         \item \textbf{The Student ($f_{\theta_s}$):} The active learner. It receives a \textit{corrupted view} of the data (masked via Gram Anchoring) and attempts to reconstruct the global context. Its weights are updated via backpropagation.
@@ -249,30 +249,30 @@
         This EMA mechanism creates a stable "mean teacher" that filters out the high-variance noise from the student's rapid learning, providing consistent targets.
     \end{itemize}
 
-    \subsection{The Composite Loss Landscape}
+    \section{The Composite Loss Landscape}
     Standard DINO uses only one loss. To handle the complexity of network traffic, we designed a composite objective function $\mathcal{L}_{total}$ combining four distinct geometric goals:
 
-    \subsubsection{1. Global Alignment: DINO Loss \& Sinkhorn-Knopp}
+    \subsection{1. Global Alignment: DINO Loss \& Sinkhorn-Knopp}
     The primary goal is for the Student to match the Teacher's class-probability distribution. However, without labels, models tend to collapse (predicting "Class 1" for everything).
     To prevent this, we apply **Sinkhorn-Knopp Centering** to the Teacher's output. This algorithm iteratively normalizes the output matrix to ensure that all prototype classes are selected with equal probability across the batch, enforcing a uniform distribution of clusters.
     \begin{equation}
         \mathcal{L}_{DINO} = - \sum p_{teacher}(x) \cdot \log p_{student}(x)
     \end{equation}
 
-    \subsubsection{2. Local Reconstruction: MIM Loss}
+    \subsection{2. Local Reconstruction: MIM Loss}
     While DINO learns global structure, it can miss fine-grained details. We add a **Masked Image Modeling (MIM)** head. The student must predict the exact numerical values of the features masked by our Gram-Cluster strategy.
     \begin{equation}
         \mathcal{L}_{MIM} = \frac{1}{|M|} \sum_{i \in M} (x_i - \hat{x}_i)^2
     \end{equation}
     This forces the model to understand the inter-feature dependencies (e.g., inferring \textit{Protocol=TCP} from \textit{Flag=SYN}).
 
-    \subsubsection{3. Feature Diversity: KoLeo Loss (Kozachenko-Leonenko)}
+    \subsection{3. Feature Diversity: KoLeo Loss (Kozachenko-Leonenko)}
     In high-dimensional spaces, points tend to clump together. The **KoLeo regularizer** maximizes the distance between neighboring points in the batch, ensuring the embedding space remains "fluffy" and utilizes the full 64-dimensional capacity.
     \begin{equation}
         \mathcal{L}_{KoLeo} = - \frac{1}{N} \sum_{i=1}^{N} \log (\min_{j \neq i} ||z_i - z_j||)
     \end{equation}
 
-    \subsubsection{4. Structural Integrity: Gram Matrix Loss}
+    \subsection{4. Structural Integrity: Gram Matrix Loss}
     Our custom addition. To explicitly force the Student to capture the correlation structure of the Teacher, we minimize the error between their Gram Matrices ($G = Z \cdot Z^T$). This ensures that if the Teacher sees that Feature A and Feature B are correlated, the Student learns that relationship even if one is masked.
     \begin{equation}
         \mathcal{L}_{Gram} = || G_{student} - G_{teacher} ||_F^2
