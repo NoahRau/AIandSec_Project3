@@ -1,4 +1,10 @@
-\documentclass[12pt,oneside,a4paper,parskip=half]{scrbook}
+\documentclass[
+  10pt,
+  twocolumn,
+  a4paper,
+  parskip=half
+]{scrartcl}
+
 
 % --- Language & Basic Config ---
 \usepackage[utf8]{inputenc}
@@ -9,9 +15,14 @@
 \usepackage{csquotes}
 \usepackage{hyphenat}
 \usepackage{newunicodechar}
-
+\usepackage{enumitem}
 % --- Layout ---
-\usepackage[a4paper,left=25mm,right=25mm,top=25mm,bottom=30mm]{geometry}
+\usepackage[
+  left=18mm,
+  right=18mm,
+  top=20mm,
+  bottom=25mm
+]{geometry}
 \usepackage{setspace}
 \onehalfspacing
 \sloppy
@@ -66,7 +77,7 @@
     frame=l,
     framesep=4pt,
     framerule=0pt,
-    linewidth=\textwidth
+    linewidth=\columnwidth
 }
 
 \lstset{style=code}
@@ -113,7 +124,6 @@
 
 % --- Front Matter ---
     \selectlanguage{english}
-    \frontmatter
     \titlehead{Technische Hochschule Würzburg-Schweinfurt (THWS)\\Faculty of Computer Science and Business Information Systems}
     \subject{\BaType}
     \title{\texorpdfstring{\BaTitle\\[5mm]\normalsize{\BaSubtitle}\\[15mm]\TitleGraphic}{\BaTitle}}
@@ -121,14 +131,19 @@
     \date{Submitted: \BaDeadline}
     \forcetwosidetitle
 
+\clearpage
+\begin{onecolumn}
     \tableofcontents
+\end{onecolumn}
 
-% --- Main Matter ---
-    \mainmatter
+\clearpage
 
-    \chapter{Introduction}
+\twocolumn
 
-    \section{The Data Landscape: NSL-KDD}
+
+    \section{Introduction}
+
+    \subsection{The Data Landscape: NSL-KDD}
     The foundation of this research is the \textbf{NSL-KDD} benchmark, a dataset representing real-world TCP/IP network traffic. The data consists of 41 distinct features per connection, categorized into three groups:
     \begin{itemize}
         \item \textbf{Basic Features:} TCP/IP connection details (e.g., \textit{Duration, Protocol Type, Service, Flag}).
@@ -136,109 +151,76 @@
         \item \textbf{Traffic Features:} Time-based window statistics (e.g., \textit{Count, Serror rate, Rerror rate}).
     \end{itemize}
     The target variable classifies traffic into either standard behavior (\textit{Normal}) or one of four attack categories: \textit{DoS, Probe, U2R (User-to-Root),} and \textit{R2L (Remote-to-Local)}.
+\subsection{The Core Challenges}
+Traditional models fail to address the structural complexities of NSL-KDD, primarily due to three factors:
+\begin{itemize}
+    \item \textbf{Extreme Class Imbalance:} Rare but critical attacks (\textit{U2R/R2L}) represent $<0.5\%$ of the data, leading to a "False Negative Trap" where global accuracy masks local failure.
+    \item \textbf{Distributional Shift:} A deliberate mismatch between $P_{train}$ and $P_{test}$ forces the model to generalize beyond memorization of training statistics.
+    \item \textbf{The Zero-Day Problem:} The test set contains novel attack signatures (\textit{e.g., Mailbomb}) absent from training, requiring semantic rather than pattern-based detection.
+\end{itemize}
 
-    \section{The Core Challenges}
-    While traditional statistical models often achieve high nominal accuracy on this dataset, they fail to address the underlying structural complexities of network intrusion detection. We identify three critical hurdles:
-
-    \subsection{Extreme Class Imbalance}
-    The dataset exhibits a severe heavy-tail distribution. Harmless traffic and volumetric Denial of Service (DoS) attacks constitute over \textbf{98\%} of the training data. In contrast, critical, stealthy attacks—specifically \textit{User-to-Root (U2R)} and \textit{Remote-to-Local (R2L)}—represent less than \textbf{0.5\%}.
-    Standard optimizers (like SGD or Adam) minimize global loss by prioritizing the majority classes. This creates a \textbf{"False Negative Trap"}: a model can achieve 90\%+ accuracy simply by predicting "Normal" or "DoS" for every instance, completely failing to detect the rare, high-impact intrusions that pose the greatest security risk.
-
-    \subsection{The Hard Domain Shift (Distributional Shift)}
-    A unique and challenging aspect of this project is the deliberate \textbf{distributional shift} between training and testing environments. The probability distribution of the training set $P_{train}(X,Y)$ differs significantly from the testing set $P_{test}(X,Y)$.
-    Unlike standard machine learning tasks where the test set is a random split of the original data, the NSL-KDD test set is constructed to test generalization rather than memorization. The statistical properties of traffic in the wild change over time, and the model must adapt to feature distributions that drift from the training baseline.
-
-    \subsection{Unknown Sub-Classes (The Zero-Day Problem)}
-    Closely linked to the domain shift is the presence of **unknown attack signatures**. The dataset contains specific attack sub-classes in the test set that are \textbf{completely absent} from the training set.
-    \begin{itemize}
-        \item \textit{Example:} The model may train on \texttt{Neptune} and \texttt{Smurf} attacks (DoS), but must correctly classify an \texttt{Apache2} or \texttt{Mailbomb} attack in production, despite never having seen those specific feature patterns before.
-    \end{itemize}
-    This requires the architecture to learn the \textit{semantic concept} of an attack (e.g., "rapid sequential requests") rather than memorizing specific feature signatures.
-
-    \section{Project Objective: Supervised Vector Space Engineering}
+    \subsection{Project Objective: Supervised Vector Space Engineering}
     To transcend these limitations, we propose a pipeline that moves beyond simple supervision. We introduce a \textbf{"Gram-Anchored Tabular Transformer"} approach.
     Instead of forcing a decision boundary on raw skewed data, we warp the feature space using \textbf{Self-Supervised Learning (DINOv3)}. By leveraging \textbf{Gram Matrix Analysis} to cluster correlated features and employing a \textbf{SwiGLU-enhanced} classification head, we aim to learn a robust manifold where rare and unknown attacks are geometrically distinct from normal traffic, regardless of their frequency in the training set.
 
-    \chapter{Architecture: The Pipeline}
+\section{Architecture: The Pipeline}
 
-    Our solution transitions from rigid linear models to a flexible Deep Learning framework driven by Attention Mechanisms. The architecture consists of a robust preprocessing pipeline followed by a Teacher-Student training loop designed to handle the specific geometric challenges of tabular data.
+Our solution transitions from rigid linear models to a flexible Deep Learning framework. The architecture consists of a robust preprocessing pipeline followed by a Teacher-Student training loop designed for the geometric challenges of tabular data.
 
-    \section{Logarithmic Normalization (The Skew Problem)}
-    Network features like \texttt{src\_bytes} (bytes sent) and \texttt{duration} follow a **heavy-tailed power-law distribution**. A single file transfer can involve gigabytes of data ($10^9$), while a heartbeat ping involves mere bytes ($10^1$).
-    Feeding these raw values into a neural network causes \textbf{exploding gradients}, as the magnitude of the update is proportional to the input size. To compress this dynamic range, we apply a log-transformation to skewed columns:
-    \begin{equation}
-        x' = \ln(x + 1)
-    \end{equation}
-    The $+1$ term prevents mathematical errors when inputs are zero. This transforms the feature space from a spanning orders of magnitude into a compact, near-normal distribution.
+\subsection{Feature Preprocessing Strategy}
+To stabilize the attention mechanism and prevent gradient explosions, we apply a multi-stage normalization pipeline:
 
-    \section{Z-Score Standardization (The Scale Problem)}
-    Deep Learning optimizers (like AdamW) assume that all features exist on a similar scale. If \textit{Duration} ranges from $[0, 1]$ and \textit{Bytes} ranges from $[0, 10000]$, the optimizer will be biased towards minimizing errors in the \textit{Bytes} column simply because the numbers are larger.
-    We apply Standard Scaling to center all continuous features around zero with unit variance:
-    \begin{equation}
-        z = \frac{x - \mu}{\sigma}
-    \end{equation}
-    This ensures that the attention mechanism calculates relevance based on \textbf{informational content}, not numerical magnitude.
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Logarithmic Normalization:} For heavy-tailed features (\textit{e.g., src\_bytes}), we apply $x' = \ln(x + 1)$ to compress the dynamic range.
+    \item \textbf{Z-Score Standardization:} Continuous features are centered via $z = (x - \mu)/\sigma$, ensuring unit variance for the optimizer.
+    \item \textbf{Categorical Embedding:} Symbolic features (\textit{Protocol, Service}) are mapped via Label Encoding to a learnable \textbf{Embedding Layer} to capture semantic similarities.
+\end{itemize}
 
-    \section{Categorical Encoding (The Vocabulary Problem)}
-    The dataset contains symbolic features such as \textit{Protocol} (TCP/UDP) and \textit{Service} (HTTP, FTP). Neural networks cannot process strings. We map these distinct categories to integer indices ($v \in \mathbb{Z}$).
-    Unlike "One-Hot Encoding," which creates sparse, high-dimensional vectors that waste memory, we utilize **Label Encoding** followed by a learnable **Embedding Layer** inside the Transformer. This allows the model to learn a dense vector representation for "HTTP" that is geometrically closer to "HTTPS" than to "FTP," capturing semantic similarity.
+\subsection{Gram-Anchored Cluster Masking}
+Standard random masking fails on tabular data due to \textbf{high multicollinearity}. If the model masks Feature A but leaves its correlate B visible, it finds a "trivial shortcut," leading to \textbf{Manifold Collapse}.
 
-    \section{The Failure of Random Noise: Why we need Cluster Masking}
-    A critical failure point in applying standard Transformers (like BERT) to tabular data is the masking strategy. In Natural Language Processing (NLP), words are discrete and not strictly deterministic of their neighbors. However, network traffic features exhibit **high multicollinearity** (e.g., \texttt{srv\_count} is statistically locked to \texttt{dst\_host\_count}).
-
-    \section{The "Leaky" Feature Space}
-    If we apply standard random masking (independent Bernoulli noise), we inadvertently introduce **information leakage**.
-    \begin{itemize}
-        \item \textbf{The Trivial Solution:} If the model masks Feature A but leaves its highly correlated neighbor Feature B visible, the network minimizes the reconstruction loss simply by copying B to A.
-        \item \textbf{Manifold Collapse:} Because the model finds this "shortcut," it stops trying to learn the deeper, non-linear relationships between disparate features (e.g., the relationship between \textit{Protocol Type} and \textit{Traffic Volume}). The resulting feature space "collapses"—it becomes a shallow representation of surface-level statistics rather than a robust geometric map of attack behaviors.
-    \end{itemize}
-
-    \section{Solution: Gram-Anchored Masking}
-    To force the model to learn the true latent structure of the data, we introduce **Correlation-Aware Cluster Masking**.
-    Prior to training, we perform a **Gram Matrix Analysis** to mathematically identify groups of highly correlated features. We detected 6 distinct clusters in the NSL-KDD dataset. During the pre-training phase, instead of masking individual cells, we mask \textbf{entire clusters simultaneously} with a probability of $p=0.4$.
-
-    This removes the "cheat codes." To reconstruct the masked cluster, the model must now reason globally, synthesizing information from uncorrelated features. This forces the encoder to learn a semantic representation of the traffic type, ensuring the feature space remains robust against the domain shifts described in Chapter 1.
+To force global reasoning, we introduce \textbf{Correlation-Aware Cluster Masking}:
+\begin{enumerate}[noitemsep]
+    \item \textbf{Analysis:} A prior Gram Matrix Analysis identified 6 distinct feature clusters.
+    \item \textbf{Execution:} During pre-training, we mask \textbf{entire clusters simultaneously} ($p=0.4$).
+\end{enumerate}
+This forces the encoder to synthesize information from uncorrelated features, ensuring a robust representation.
 
 % --- TIKZ: PREPROCESSING PIPELINE ---
-    \begin{figure}[H]
-        \centering
-% Resizebox fixes layout issues by scaling the tikzpicture to textwidth
-        \resizebox{\textwidth}{!}{
-            \begin{tikzpicture}[
-                node distance=1.2cm,
-                block/.style={rectangle, draw, fill=blue!10, text width=19em, text centered, rounded corners, minimum height=2.5em, drop shadow},
-                arrow/.style={-Latex, thick}
-            ]
-                \node (raw) [block, fill=gray!20] {\textbf{Raw Data}\\(network\_connections.csv)};
-                \node (split) [block, below=of raw] {Train/Test Split};
+\begin{figure}[!ht]
+\centering
+\resizebox{\columnwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.2cm,
+        block/.style={rectangle, draw, fill=blue!10, text width=19em, text centered, rounded corners, minimum height=2.5em, drop shadow},
+        arrow/.style={-Latex, thick}
+    ]
+        \node (raw) [block, fill=gray!20] {\textbf{Raw Data}\\(network\_connections.csv)};
+        \node (split) [block, below=of raw] {Train/Test Split};
+        \node (log) [block, below=of split] {\textbf{Log Transform}};
+        \node (eng) [block, below=of log] {\textbf{Feature Engineering}};
+        \node (scale) [block, below=of eng] {\textbf{StandardScaler}};
+        \node (enc) [block, below=of scale] {\textbf{Categorical Embedding}};
+        \node (gram) [block, below=of enc, fill=red!10] {\textbf{Gram Matrix Analysis}};
 
-                \node (log) [block, below=of split] {\textbf{Log Transform}\\(Skewed Features)};
-                \node (eng) [block, below=of log] {\textbf{Feature Engineering}\\(Byte Ratio, Srv Diff)};
-                \node (scale) [block, below=of eng] {\textbf{StandardScaler}};
-                \node (enc) [block, below=of scale] {\textbf{Label/Cat Encoding}};
+        \draw [arrow] (raw) -- (split);
+        \draw [arrow] (split) -- (log);
+        \draw [arrow] (log) -- (eng);
+        \draw [arrow] (eng) -- (scale);
+        \draw [arrow] (scale) -- (enc);
+        \draw [arrow] (enc) -- (gram);
 
-                \node (gram) [block, below=of enc, fill=red!10] {\textbf{Gram Matrix Analysis}\\(Compute Feature Clusters)};
+        \node[draw, dashed, inner sep=0.6cm, fit=(log) (gram), label=left:\rotatebox{90}{\textbf{Preprocessing Pipeline}}] {};
+    \end{tikzpicture}
+}
+\caption{The Preprocessing Pipeline. Strategic cluster-masking verhindert Information Leakage.}
+\label{fig:preprocessing_pipeline}
+\end{figure}
 
-                \draw [arrow] (raw) -- (split);
-                \draw [arrow] (split) -- (log);
-                \draw [arrow] (log) -- (eng);
-                \draw [arrow] (eng) -- (scale);
-                \draw [arrow] (scale) -- (enc);
-                \draw [arrow] (enc) -- (gram);
-
-                % Grouping box
-                \node[draw, dashed, inner sep=0.6cm, fit=(log) (gram), label=left:\rotatebox{90}{\textbf{SOTA Preprocessing}}] {};
-
-            \end{tikzpicture}
-        }
-        \caption{The Preprocessing Pipeline culminating in the Gram Matrix Analysis. This step is crucial for preventing feature leakage during the self-supervised training phase.}
-        \label{fig:preprocessing_pipeline}
-    \end{figure}
-
-    \chapter{DINOv3 \& Gram Anchored Training Loop}
+    \section{DINOv3 \& Gram Anchored Training Loop}
     To warp the feature space into a manifold where rare attacks are separable, we implement a modified **DINO (Distillation with No Labels)** architecture. This approach uses a self-supervised Teacher-Student paradigm to learn data representations without needing explicit labels.
 
-    \section{The Teacher-Student Dynamics}
+    \subsection{The Teacher-Student Dynamics}
     The architecture consists of two identical Transformer networks:
     \begin{itemize}
         \item \textbf{The Student ($f_{\theta_s}$):} The active learner. It receives a \textit{corrupted view} of the data (masked via Gram Anchoring) and attempts to reconstruct the global context. Its weights are updated via backpropagation.
@@ -249,39 +231,40 @@
         This EMA mechanism creates a stable "mean teacher" that filters out the high-variance noise from the student's rapid learning, providing consistent targets.
     \end{itemize}
 
-    \section{The Composite Loss Landscape}
+    \subsection{The Composite Loss Landscape}
     Standard DINO uses only one loss. To handle the complexity of network traffic, we designed a composite objective function $\mathcal{L}_{total}$ combining four distinct geometric goals:
 
-    \subsection{1. Global Alignment: DINO Loss \& Sinkhorn-Knopp}
+    \subsubsection{1. Global Alignment: DINO Loss \& Sinkhorn-Knopp}
     The primary goal is for the Student to match the Teacher's class-probability distribution. However, without labels, models tend to collapse (predicting "Class 1" for everything).
     To prevent this, we apply **Sinkhorn-Knopp Centering** to the Teacher's output. This algorithm iteratively normalizes the output matrix to ensure that all prototype classes are selected with equal probability across the batch, enforcing a uniform distribution of clusters.
     \begin{equation}
         \mathcal{L}_{DINO} = - \sum p_{teacher}(x) \cdot \log p_{student}(x)
     \end{equation}
 
-    \subsection{2. Local Reconstruction: MIM Loss}
+    \subsubsection{2. Local Reconstruction: MIM Loss}
     While DINO learns global structure, it can miss fine-grained details. We add a **Masked Image Modeling (MIM)** head. The student must predict the exact numerical values of the features masked by our Gram-Cluster strategy.
     \begin{equation}
         \mathcal{L}_{MIM} = \frac{1}{|M|} \sum_{i \in M} (x_i - \hat{x}_i)^2
     \end{equation}
     This forces the model to understand the inter-feature dependencies (e.g., inferring \textit{Protocol=TCP} from \textit{Flag=SYN}).
 
-    \subsection{3. Feature Diversity: KoLeo Loss (Kozachenko-Leonenko)}
+    \subsubsection{3. Feature Diversity: KoLeo Loss (Kozachenko-Leonenko)}
     In high-dimensional spaces, points tend to clump together. The **KoLeo regularizer** maximizes the distance between neighboring points in the batch, ensuring the embedding space remains "fluffy" and utilizes the full 64-dimensional capacity.
     \begin{equation}
         \mathcal{L}_{KoLeo} = - \frac{1}{N} \sum_{i=1}^{N} \log (\min_{j \neq i} ||z_i - z_j||)
     \end{equation}
 
-    \subsection{4. Structural Integrity: Gram Matrix Loss}
+    \subsubsection{4. Structural Integrity: Gram Matrix Loss}
     Our custom addition. To explicitly force the Student to capture the correlation structure of the Teacher, we minimize the error between their Gram Matrices ($G = Z \cdot Z^T$). This ensures that if the Teacher sees that Feature A and Feature B are correlated, the Student learns that relationship even if one is masked.
     \begin{equation}
         \mathcal{L}_{Gram} = || G_{student} - G_{teacher} ||_F^2
     \end{equation}
+    Unlike variance- or covariance-based regularizers such as VICReg or Barlow Twins, the Gram loss explicitly preserves pairwise feature correlations rather than only global dispersion statistics. This is critical for tabular network data, where strong multicollinearity would otherwise allow the student to recover masked features via trivial shortcuts.
 
 % --- TIKZ: DINO ARCHITECTURE ---
     \begin{figure}[H]
         \centering
-        \resizebox{\textwidth}{!}{
+        \resizebox{\columnwidth}{!}{
             \begin{tikzpicture}[
                 node distance=2cm,
                 auto,
@@ -340,10 +323,10 @@
         \label{fig:dino_architecture}
     \end{figure}
 
-    \section{Fine-Tuning: Deep SwiGLU Classification Head}
+    \subsection{Fine-Tuning: Deep SwiGLU Classification Head}
     Once the encoder has learned a robust manifold via self-supervision, we attach a specialized classification head. Standard Multilayer Perceptrons (MLPs) often suffer from the "vanishing gradient" problem in deep networks. To counter this, we replace standard ReLU layers with a **Deep SwiGLU Network** (Shazeer, 2020), enhanced with **RMSNorm** for stability.
 
-    \subsection{Why SwiGLU? (Gated Linear Units)}
+    \subsubsection{Why SwiGLU? (Gated Linear Units)}
     The SwiGLU activation function is not just a non-linearity; it is a **gating mechanism**.
     \begin{equation}
         \text{SwiGLU}(x) = \text{Swish}(W_g x) \odot (W_v x)
@@ -355,7 +338,7 @@
     \end{itemize}
     This allows the network to dynamically suppress irrelevant features (noise) while amplifying critical attack signatures, effectively acting as a learnable feature selector.
 
-    \subsection{Architecture: The Classifier Stack}
+    \subsubsection{Architecture: The Classifier Stack}
     The final head consists of two stacked SwiGLU blocks with a dropout rate of $0.2$.
     \begin{itemize}
         \item \textbf{Partial Unfreezing:} To fine-tune the representation without destroying the pre-trained structure, we unfreeze only the \textbf{last Transformer layer} of the encoder.
@@ -365,7 +348,7 @@
 % --- TIKZ: SWIGLU BLOCK ---
     \begin{figure}[H]
         \centering
-        \resizebox{0.7\textwidth}{!}{
+        \resizebox{\columnwidth}{!}{
             \begin{tikzpicture}[
                 node distance=1.5cm,
                 auto,
@@ -421,7 +404,7 @@
         \label{fig:swiglu}
     \end{figure}
 
-    \subsection{Combating Imbalance: Weighted Focal Loss}
+    \subsubsection{Combating Imbalance: Weighted Focal Loss}
     Standard Cross-Entropy Loss is overwhelmed by the majority class (Normal traffic). To fix this, we implement **Weighted Focal Loss**:
     \begin{equation}
         \mathcal{L}_{FL} = - \alpha_t (1 - p_t)^\gamma \log(p_t)
@@ -431,11 +414,11 @@
         \item \textbf{Inverse Class Weights ($\alpha_t$):} We weight each class by the inverse square root of its frequency: $\alpha_c = \sqrt{N_{total} / N_c}$. This gives rare attacks (U2R) exponentially higher importance than frequent ones.
     \end{itemize}
 
-    \chapter{Implementation Details}
+    \section{Implementation Details}
 
-    The proposed architecture is implemented using the PyTorch framework. This section details the specific mechanisms used to enforce structural alignment between the Student and Teacher networks, as well as the optimization strategies required to stabilize training on the highly imbalanced NSL-KDD dataset.
+    The proposed architecture is implemented using the PyTorch framework. This subsection details the specific mechanisms used to enforce structural alignment between the Student and Teacher networks, as well as the optimization strategies required to stabilize training on the highly imbalanced NSL-KDD dataset.
 
-    \section{Structural Alignment via Gram Matrices}
+    \subsection{Structural Alignment via Gram Matrices}
     A defining feature of our approach is the use of the **Gram Matrix** to preserve the geometric relationships between tokens. While the standard DINO loss aligns the \textit{global} class distribution (via the [CLS] token), it ignores the \textit{local} correlations between specific features (e.g., the relationship between \texttt{src\_bytes} and \texttt{dst\_bytes}).
 
     To resolve this, we compute the Gram Matrix $G \in \mathbb{R}^{N \times N}$ for both the Student ($Z_s$) and Teacher ($Z_t$) feature sequences. The Gram Matrix is defined as the dot product of the normalized feature vectors:
@@ -468,105 +451,110 @@ def compute_gram_loss(student_seq, teacher_seq):
     return F.mse_loss(g_s, g_t)
     \end{lstlisting}
 
-    \section{Optimization \& Hyperparameters}
+    \subsection{Optimization \& Hyperparameters}
     Achieving convergence on tabular data requires a delicate balance between model capacity and regularization. Table \ref{tab:hyperparams} outlines the configuration for the **DINOv3-XY** architecture.
 
-    \subsection{Differential Learning Rates}
+    \subsubsection{Differential Learning Rates}
     To prevent **Catastrophic Forgetting** during the fine-tuning phase, we employ a layer-wise learning rate decay strategy.
     \begin{itemize}
         \item \textbf{Classification Head ($5 \times 10^{-4}$):} The randomized weights of the SwiGLU head require a higher learning rate to quickly adapt to the decision boundaries.
         \item \textbf{Transformer Backbone ($5 \times 10^{-5}$):} The pre-trained encoder requires only subtle adjustments. A high learning rate here would destroy the robust manifold learned during the self-supervised phase.
     \end{itemize}
 
-    \subsection{Gradient Accumulation}
+    \subsubsection{Gradient Accumulation}
     Due to the memory constraints of attention mechanisms ($O(N^2)$), we utilize a physical batch size of 64. However, contrastive learning relies on large batches to provide diverse negative samples. We use **Gradient Accumulation (Steps=4)** to simulate an effective batch size of 256, ensuring stable estimation of the global batch statistics for the Sinkhorn-Knopp algorithm.
 
-    \begin{table}[h]
-        \centering
-        \caption{Hyperparameter Configuration for DINOv3-XY}
-        \label{tab:hyperparams}
-        \begin{tabular}{@{}ll@{}}
-            \toprule
-            \textbf{Hyperparameter} & \textbf{Value / Strategy} \\ \midrule
-            \multicolumn{2}{c}{\textit{Architecture}} \\
-            Embedding Dimension & 64 \\
-            Projection Heads & MLP $\to$ SwiGLU (Depth 2) \\
-            Encoder Depth & 4 Transformer Layers (4 Heads) \\
-            \midrule
-            \multicolumn{2}{c}{\textit{Self-Supervised Pre-training}} \\
-            Global Batch Size & 256 (via Gradient Accumulation) \\
-            Masking Ratio & 0.4 (Cluster-wise Strategy) \\
-            Optimizer & AdamW ($\beta_1=0.9, \beta_2=0.999$) \\
-            Learning Rate & $1 \times 10^{-3}$ (Cosine Schedule) \\
-            Teacher Momentum ($\lambda$) & $0.996 \to 1.0$ (Cosine Schedule) \\
-            \midrule
-            \multicolumn{2}{c}{\textit{Supervised Fine-tuning}} \\
-            Loss Function & Weighted Focal Loss ($\gamma=2.0$) \\
-            Head LR & $5 \times 10^{-4}$ \\
-            Backbone LR & $5 \times 10^{-5}$ (10x reduction) \\
-            \bottomrule
-        \end{tabular}
-    \end{table}
+\begin{table}[ht] % ht ist flexibler als H
+    \centering
+    \scriptsize % Kompakter für die Spalte
+    \renewcommand{\arraystretch}{1.1}
+    \caption{DINOv3-XY Hyperparameters}
+    \label{tab:hyperparams}
+    \begin{tabularx}{\columnwidth}{@{}X l@{}}
+        \toprule
+        \textbf{Hyperparameter} & \textbf{Value / Strategy} \\ \midrule
+        \rowcolor{gray!10} \multicolumn{2}{l}{\textit{Architecture}} \\
+        Embedding Dim. & 64 \\
+        Projection Heads & MLP $\to$ SwiGLU \\
+        Encoder Depth & 4 Layers (4 Heads) \\
+        \midrule
+        \rowcolor{gray!10} \multicolumn{2}{l}{\textit{Self-Supervised Pre-training}} \\
+        Batch Size & 256 (Accum. Steps) \\
+        Masking Ratio & 0.4 (Cluster) \\
+        Optimizer & AdamW \\
+        Learning Rate & $1 \times 10^{-3}$ (Cosine) \\
+        Teacher Mom. $\lambda$ & $0.996 \to 1.0$ \\
+        \midrule
+        \rowcolor{gray!10} \multicolumn{2}{l}{\textit{Supervised Fine-tuning}} \\
+        Loss Function & Weighted Focal Loss \\
+        Head LR & $5 \times 10^{-4}$ \\
+        Backbone LR & $5 \times 10^{-5}$ \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
 
-    \chapter{Evaluation \& Results}
+    \section{Evaluation \& Results}
 
     The DINOv3-XY architecture was evaluated on the **NSL-KDD Test+** dataset. Unlike the training set, the Test+ set contains specific attack signatures (e.g., \textit{Apache2, Mscan, Snmpget}) that appear with different frequency distributions or are entirely novel (Zero-Day aspect).
 
-    \section{Binary Performance: The Baseline}
+    \subsection{Binary Performance: The Baseline}
     First, we assess the model's ability to distinguish between benign traffic and general malicious activity. As shown in Table \ref{tab:binary}, the model achieves a global accuracy of **87.54\%**.
 
-    \begin{table}[H]
-        \centering
-        \renewcommand{\arraystretch}{1.2}
-        \begin{tabular}{lcccc}
-            \toprule
-            \textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
-            \midrule
-            Normal & 0.8048 & \textbf{0.9382} & 0.8664 & 9711 \\
-            Attack & \textbf{0.9465} & 0.8278 & \textbf{0.8832} & 12833 \\
-            \midrule
-            \textbf{Weighted Avg} & 0.8855 & 0.8754 & 0.8760 & 22544 \\
-            \bottomrule
-        \end{tabular}
-        \caption{Binary Evaluation Metrics. The high precision for "Attack" (0.94) indicates a low False Alarm rate, a crucial metric for reducing analyst fatigue in SOC (Security Operations Center) environments.}
-        \label{tab:binary}
-    \end{table}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \scriptsize % Schriftgröße leicht reduzieren, falls nötig
+    \begin{tabularx}{\columnwidth}{Xcccc} % X füllt den restlichen Platz
+        \toprule
+        \textbf{Class} & \textbf{Prec.} & \textbf{Rec.} & \textbf{F1} & \textbf{Supp.} \\
+        \midrule
+        Normal & 0.8048 & \textbf{0.9382} & 0.8664 & 9711 \\
+        Attack & \textbf{0.9465} & 0.8278 & \textbf{0.8832} & 12833 \\
+        \midrule
+        \textbf{W. Avg} & 0.8855 & 0.8754 & 0.8760 & 22544 \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Binary Evaluation Metrics. High precision (0.94) reduces False Alarms in SOC environments.}
+    \label{tab:binary}
+\end{table}
 
-    \section{Multiclass Performance: The Imbalance Challenge}
+    \subsection{Multiclass Performance: The Imbalance Challenge}
     The core objective of this research was to improve detection rates for the minority classes: **User-to-Root (U2R)** and **Remote-to-Local (R2L)**. Standard supervised models (like Random Forest or Logistic Regression) often yield an F1-Score of 0.0 for these classes due to their statistical insignificance ($<0.5\%$ of data).
 
     Table \ref{tab:multiclass} demonstrates the impact of our **Gram Anchoring Strategy**:
 
-    \begin{table}[H]
-        \centering
-        \renewcommand{\arraystretch}{1.2}
-        \begin{tabular}{lcccc}
-            \toprule
-            \textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
-            \midrule
-            DoS & \textbf{0.9616} & 0.8433 & \textbf{0.8986} & 7458 \\
-            Normal & 0.8048 & \textbf{0.9382} & 0.8664 & 9711 \\
-            Probe & 0.8080 & 0.9124 & 0.8570 & 2421 \\
-            \rowcolor{yellow!10} R2L & 0.6588 & 0.4080 & \textbf{0.5040} & 2887 \\
-            \rowcolor{red!10} U2R & 0.2795 & \textbf{0.6716} & \textbf{0.3947} & 67 \\
-            \bottomrule
-        \end{tabular}
-        \caption{Multiclass Performance. Note the \textbf{67.16\% Recall for U2R}. While Precision is lower, the model successfully flags the majority of critical root compromises.}
-        \label{tab:multiclass}
-    \end{table}
+\begin{table}[ht] % ht ist im zweispaltigen Layout stabiler als H
+    \centering
+    \scriptsize % Schriftgröße für zweispaltiges Layout
+    \renewcommand{\arraystretch}{1.2}
+    \setlength{\tabcolsep}{3pt} % Verringert horizontalen Padding
+    \caption{Multiclass Performance. High Recall (67.16\%) for U2R compensates for lower Precision in security-critical contexts.}
+    \label{tab:multiclass}
+    \begin{tabularx}{\columnwidth}{Xcccc}
+        \toprule
+        \textbf{Class} & \textbf{Prec.} & \textbf{Rec.} & \textbf{F1} & \textbf{Supp.} \\
+        \midrule
+        DoS    & \textbf{0.9616} & 0.8433 & \textbf{0.8986} & 7458 \\
+        Normal & 0.8048 & \textbf{0.9382} & 0.8664 & 9711 \\
+        Probe  & 0.8080 & 0.9124 & 0.8570 & 2421 \\
+        \rowcolor{yellow!10} R2L & 0.6588 & 0.4080 & \textbf{0.5040} & 2887 \\
+        \rowcolor{red!10} U2R & 0.2795 & \textbf{0.6716} & \textbf{0.3947} & 67 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
 
-    \subsection{Critical Analysis: The U2R Trade-off}
+    \subsubsection{Critical Analysis: The U2R Trade-off}
     A closer look at the \textbf{U2R (User-to-Root)} performance reveals a deliberate architectural trade-off.
     \begin{itemize}
         \item \textbf{Low Precision (0.28):} The model generates False Positives, often misclassifying complex `Normal` traffic as `U2R`.
         \item \textbf{High Recall (0.67):} Crucially, the model detects **67\%** of actual root attacks.
     \end{itemize}
-    In a cybersecurity context, this is the preferred behavior. Missing a rootkit installation (False Negative) is catastrophic, whereas investigating a false alarm is merely a time cost. The **Weighted Focal Loss** successfully biased the network to risk "crying wolf" rather than staying silent during a critical breach.
+    In a cybersecurity context, this is the preferred behavior. Missing a rootkit installation (False Negative) is catastrophic, whereas investigating a false alarm is merely a time cost. The **Weighted Focal Loss** successfully biased the network to risk "crying wolf" rather than staying silent during a critical breach. This behavior is not an artifact of miscalibration but a deliberate optimization outcome induced by the weighted focal loss. The model is explicitly biased toward minimizing false negatives for high-impact attack classes, accepting reduced precision as a necessary trade-off in security-critical deployments.
 
-    \section{Audit: Training Density vs. Test Generalization}
+    \subsection{Audit: Training Density vs. Test Generalization}
     To rigorously assess the model's capabilities, we correlated the \textbf{Training Density} (number of samples seen during optimization) with the \textbf{Test Detection Rate}. This comparison reveals three distinct behavioral clusters: \textit{Memorization}, \textit{Few-Shot Learning}, and \textit{Zero-Shot Generalization}.
 
-    \subsection{The "Data Starvation" Analysis}
+    \subsubsection{The "Data Starvation" Analysis}
     Table \ref{tab:train_vs_test} juxtaposes the training counts against test performance. The results validate the efficacy of our **Gram Anchoring** strategy:
     \begin{itemize}
         \item \textbf{High-Resource Attacks (N > 1000):} The model achieves near-perfect detection ($>99\%$), confirming successful convergence.
@@ -574,39 +562,37 @@ def compute_gram_loss(student_seq, teacher_seq):
         \item \textbf{Zero-Shot Attacks (N = 0):} Remarkably, the model successfully detects \textbf{80\% of \textit{ps}} and \textbf{100\% of \textit{sqlattack}} despite \textit{never seeing them during training}. This confirms the encoder learned the \textit{semantic concept} of a U2R attack rather than just specific signatures.
     \end{itemize}
 
-    \begin{table}[H]
-        \centering
-        \scriptsize % Smaller font to fit data
-        \renewcommand{\arraystretch}{1.2}
-        \begin{tabular}{ll|rr|c|l}
-            \toprule
-            \textbf{Category} & \textbf{Attack Signature} & \textbf{Train Samples} & \textbf{Test Samples} & \textbf{Detected (\%)} & \textbf{Behavior Type} \\
-            \midrule
-            % --- High Resource ---
-            \rowcolor{green!10} DoS & Neptune & 32,993 & 4,657 & 98.8\% & \textit{Fully Converged} \\
-            \rowcolor{green!10} Probe & Satan & 2,899 & 735 & 99.7\% & \textit{Fully Converged} \\
-            \rowcolor{green!10} DoS & Smurf & 2,102 & 665 & 100.0\% & \textit{Fully Converged} \\
-            \midrule
-            % --- Few Shot ---
-            \rowcolor{yellow!10} U2R & Buffer Overflow & 22 & 20 & 75.0\% & \textit{Robust Few-Shot} \\
-            \rowcolor{yellow!10} R2L & Guess Passwd & 42 & 1,231 & 22.5\% & \textit{Generalization Gap} \\
-            \rowcolor{yellow!10} U2R & Rootkit & 10 & 13 & 38.5\% & \textit{Data Starved} \\
-            \rowcolor{orange!10} U2R & Perl & \textbf{3} & 2 & \textbf{100.0\%} & \textit{Successful Few-Shot} \\
-            \rowcolor{orange!10} R2L & Phf & \textbf{2} & 2 & 50.0\% & \textit{Data Starved} \\
-            \midrule
-            % --- Zero Shot (New in Test) ---
-            \rowcolor{blue!10} U2R & SqlAttack & \textbf{0} & 2 & \textbf{100.0\%} & \textbf{Zero-Shot Success} \\
-            \rowcolor{blue!10} U2R & Ps & \textbf{0} & 15 & \textbf{80.0\%} & \textbf{Zero-Shot Success} \\
-            \rowcolor{blue!10} Probe & Mscan & \textbf{0} & 996 & 79.4\% & \textbf{Zero-Shot Success} \\
-            \rowcolor{red!10} DoS & Mailbomb & 0 & 293 & 0.0\% & \textit{Zero-Shot Failure} \\
-            \rowcolor{red!10} R2L & SnmpGuess & 0 & 331 & 0.0\% & \textit{Zero-Shot Failure} \\
-            \bottomrule
-        \end{tabular}
-        \caption{Impact of Training Density on Detection Rates. Green = High Resource, Yellow/Orange = Few-Shot, Blue/Red = Zero-Shot (Unseen in Training).}
-        \label{tab:train_vs_test}
-    \end{table}
+   \begin{table*}[t]
+    \centering
+    \scriptsize
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{ll|rr|c|l}
+        \toprule
+        \textbf{Category} & \textbf{Attack} & \textbf{Train} & \textbf{Test} & \textbf{Detected (\%)} & \textbf{Behavior} \\
+        \midrule
+        \rowcolor{green!10} DoS & Neptune & 32,993 & 4,657 & 98.8\% & Fully Converged \\
+        \rowcolor{green!10} Probe & Satan & 2,899 & 735 & 99.7\% & Fully Converged \\
+        \rowcolor{green!10} DoS & Smurf & 2,102 & 665 & 100.0\% & Fully Converged \\
+        \midrule
+        \rowcolor{yellow!10} U2R & Buffer Overflow & 22 & 20 & 75.0\% & Robust Few-Shot \\
+        \rowcolor{yellow!10} R2L & Guess Passwd & 42 & 1,231 & 22.5\% & Generalization Gap \\
+        \rowcolor{yellow!10} U2R & Rootkit & 10 & 13 & 38.5\% & Data Starved \\
+        \rowcolor{orange!10} U2R & Perl & \textbf{3} & 2 & \textbf{100.0\%} & Successful Few-Shot \\
+        \rowcolor{orange!10} R2L & Phf & \textbf{2} & 2 & 50.0\% & Data Starved \\
+        \midrule
+        \rowcolor{blue!10} U2R & SqlAttack & \textbf{0} & 2 & \textbf{100.0\%} & Zero-Shot Success \\
+        \rowcolor{blue!10} U2R & Ps & \textbf{0} & 15 & \textbf{80.0\%} & Zero-Shot Success \\
+        \rowcolor{blue!10} Probe & Mscan & \textbf{0} & 996 & 79.4\% & Zero-Shot Success \\
+        \rowcolor{red!10} DoS & Mailbomb & 0 & 293 & 0.0\% & Zero-Shot Failure \\
+        \rowcolor{red!10} R2L & SnmpGuess & 0 & 331 & 0.0\% & Zero-Shot Failure \\
+        \bottomrule
+    \end{tabular}
+    \caption{Impact of training density on detection rates across attack categories.}
+    \label{tab:train_vs_test}
+\end{table*}
 
-    \subsection{Visualization: The Generalization Frontier}
+
+    \subsubsection{Visualization: The Generalization Frontier}
     Figure \ref{fig:data_efficiency} visualizes the relationship between data availability and model performance. The **"Zero-Shot Zone"** (leftmost region) highlights the model's ability to infer malice purely from geometric anomalies in the embedding space, without prior examples.
 
 % --- TIKZ: TRAINING DENSITY CHART ---
@@ -614,7 +600,7 @@ def compute_gram_loss(student_seq, teacher_seq):
         \centering
         \begin{tikzpicture}
             \begin{semilogxaxis}[
-                width=\textwidth,
+                width=\columnwidth,
                 height=8cm,
                 xlabel={Training Samples (Log Scale)},
                 ylabel={Test Detection Rate (\%)},
@@ -673,16 +659,16 @@ def compute_gram_loss(student_seq, teacher_seq):
                 \legend{High Resource (>1k), Few-Shot (<50), Zero-Shot (Unseen)}
             \end{semilogxaxis}
         \end{tikzpicture}
-        \caption{The Generalization Frontier. Points at $x \approx 10^0$ represent Zero-Shot attacks (0 training samples). The high variance in this zone indicates that while the model generalizes well to some unknown signatures (SqlAttack), it fails on others (Mailbomb), highlighting the need for future Few-Shot Learning augmentation.}
+        \caption{The Generalization Frontier. Points at $x \approx 10^0$ represent Zero-Shot attacks (0 training samples). The high variance in this zone indicates that while the model generalizes well to some unknown signatures (SqlAttack), it fails on others (Mailbomb), highlighting the need for future Few-Shot Learning augmentation. These failure cases indicate attack signatures whose statistical footprint overlaps heavily with benign high-volume traffic, limiting purely geometric separability in the learned embedding space. In such cases, semantic payload information or temporal context beyond the NSL-KDD feature set would be required for reliable detection.}
         \label{fig:data_efficiency}
     \end{figure}
 
-    \chapter{Conclusion and Future Outlook}
+    \section{Conclusion and Future Outlook}
     This research demonstrates that the limitations of traditional Network Intrusion Detection Systems (NIDS)—specifically their inability to detect rare and novel attacks—can be overcome through **Gram-Anchored Self-Supervision**.
 
     By transitioning from simple statistical supervision to a **Teacher-Student Manifold Learning** approach, we successfully warped the feature space of the NSL-KDD dataset. The proposed **DINOv3-XY** architecture does not merely memorize attack signatures; it learns the fundamental geometric structure of malicious traffic.
 
-    \section{Key Research Contributions}
+    \subsection{Key Research Contributions}
     \begin{enumerate}
         \item \textbf{Solving the "False Negative Trap":}
         Standard models often achieve high accuracy by ignoring minority classes. Our pipeline achieved a **U2R Recall of 67.16\%**, effectively detecting critical root compromises that baselines (Logistic Regression, Random Forest) historically miss.
@@ -694,10 +680,10 @@ def compute_gram_loss(student_seq, teacher_seq):
         Perhaps the most significant finding is the model's ability to detect **Zero-Shot Attacks**. The model successfully classified 100\% of \textit{SqlAttack} and 80\% of \textit{Ps} samples in the test set, despite having \textbf{zero} exposure to these specific signatures during training. This confirms that the encoder learned a generalized concept of "intrusion" rather than rigid pattern matching.
     \end{enumerate}
 
-    \section{Limitations: The Granularity Gap}
+    \subsection{Limitations: The Granularity Gap}
     While the model excels at broad categorization, our audit revealed a **"Data Starvation"** boundary. Signatures with fewer than 5 training examples (e.g., \textit{Phf, Sendmail}) suffered from inconsistent detection. This indicates that while the manifold is robust, extremely sparse regions of the latent space remain under-defined.
 
-    \section{Future Work}
+    \subsection{Future Work}
     To bridge the gap between academic research and production deployment, future iterations should focus on:
 
     \begin{itemize}
